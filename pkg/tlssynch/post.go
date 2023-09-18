@@ -1,26 +1,28 @@
 package tlssynch
 
 import (
+	"crypto/tls"
 	"log"
 	"net"
 	"time"
-	"crypto/tls"
+
 	"github.com/transactrx/rxtransactionmodels/pkg/transaction"
 )
 
 var counter int32 = 0
+
 const PBM_DATA_BUFFER = 16384
 
-func Post(url string, port string, disconnectAfterResponse bool,claim []byte, header map[string][]string, timeOut time.Duration) ([]byte, map[string][]string, transaction.ErrorInfo) {
+func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string, timeOut time.Duration) ([]byte, map[string][]string, transaction.ErrorInfo) {
 
-	conn, err := Connect(url,port)
+	conn, err := Connect()
 	var responseBuffer []byte
 	bytesRead := 0
 	if err != transaction.ErrorCode.TRX00 {
 
 		log.Printf("Pbm.RouteTransaction ConnectToPbm failed, error: '%s'", err.Message)
 		//response.BuildResponseError(claim, errorCode, startTime)
-		return nil, nil,err
+		return nil, nil, err
 	} else {
 		responseBuffer, bytesRead, err = SubmitRequest(string(claim), conn, timeOut*time.Second) // TODO read from env variables
 		if bytesRead <= 0 {
@@ -31,11 +33,10 @@ func Post(url string, port string, disconnectAfterResponse bool,claim []byte, he
 	return responseBuffer, nil, transaction.ErrorCode.TRX00
 }
 
-func Connect(host string, port string) (net.Conn,transaction.ErrorInfo) {
+func Connect() (net.Conn, transaction.ErrorInfo) {
 
-	//var tlsConn net.Conn = nil
 	// Combine host and port into an address
-	address := host + ":" + port
+	address := Cfg.PbmUrl + ":" + Cfg.PbmPort
 	log.Printf("tlssynch.Connect connecting to '%s'", address)
 
 	// Create a TLS configuration
@@ -46,7 +47,7 @@ func Connect(host string, port string) (net.Conn,transaction.ErrorInfo) {
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		log.Printf("tlssynch.net.Dial failed, error: '%s'", err)
-		return nil,transaction.ErrorCode.TRX02
+		return nil, transaction.ErrorCode.TRX02
 		//return nil,models.ErrorMap
 	} else {
 		log.Printf("tlssynch.net.Dial connected to '%s' SUCCESS", address)
@@ -61,13 +62,12 @@ func Connect(host string, port string) (net.Conn,transaction.ErrorInfo) {
 		}
 		//return nil, pbmlib.ErrorCode.TRX03
 	}
-	return conn,transaction.ErrorCode.TRX00
+	return conn, transaction.ErrorCode.TRX00
 }
-
 
 func SubmitRequest(claim string, conn net.Conn, timeout time.Duration) ([]byte, int, transaction.ErrorInfo) {
 
-	defer conn.Close()
+	//defer conn.Close()
 
 	log.Printf("Post data(16) %.16s time-out value: %f seconds", claim, timeout.Seconds())
 	// Set a read deadline for the connection

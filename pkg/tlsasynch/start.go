@@ -7,7 +7,6 @@ type Config struct {
 	PbmPort           string
 	PbmReceiveTimeOut string
 }
-
 var Cfg Config
 
 func Start(cfgMap map[string]interface{}) error {
@@ -19,13 +18,12 @@ func Start(cfgMap map[string]interface{}) error {
 		log.Printf("Start Url not Provided failed")
 	}
 	tmp, ok = cfgMap["pbmPort"].(string)
-
-	if ok {
+	if ok{
 		Cfg.PbmPort = tmp
 	} else {
 		log.Printf("Start port not Provided failed")
 	}
-		tmp, ok = cfgMap["pbmReceiveTimeOut"].(string)
+	tmp, ok = cfgMap["pbmReceiveTimeOut"].(string)
 
 	if ok {
 		Cfg.PbmReceiveTimeOut = tmp

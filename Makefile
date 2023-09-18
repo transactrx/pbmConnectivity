@@ -1,4 +1,4 @@
-BINARY_NAME=pbmconnectivity.exe
+BINARY_NAME=pbmconnecttlsSynchSample.exe
 
 hello:
 	echo "Hello"
@@ -9,7 +9,7 @@ build:
 	go build ./...
 
 run:
-	go build -o ${BINARY_NAME} cmd/main/main.go
+	go build -o ${BINARY_NAME} cmd/examplePBM/main.go
 	./${BINARY_NAME}
 	
 

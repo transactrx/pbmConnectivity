@@ -1,10 +1,6 @@
 package tlssynch
 
-
-func Close()error  {
-	
-	
-
+func (pc *TLSSyncConnect) Close() error {
 
 	return nil
 }
