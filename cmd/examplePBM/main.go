@@ -21,9 +21,9 @@ func main() {
 
 	config := make(map[string]interface{})
 
-	config["pbmUrl"] = "10.0.120.252"
+	config["pbmUrl"] = "10.0.120.250"
 	config["pbmPort"] = "5845"
-	config["pbmReceiveTimeOut"] = "20"
+	config["pbmReceiveTimeOut"] = "8"
 
 
 	tlsCon.Start(config)
@@ -33,7 +33,13 @@ func main() {
 	}else{
 		log.Printf("examplePBM response: '%s'",response)
 	}
-
+	
+	response,_,err = tlsCon.Post([]byte("TESTING LIBRARY2..."),nil)
+	if(err!=transaction.ErrorCode.TRX00){
+		log.Printf("tlsCon.Post failed: '%v'",err)
+	}else{
+		log.Printf("examplePBM response: '%s'",response)
+	}
 	c := make(chan os.Signal)
     signal.Notify(c, os.Interrupt)
 
