@@ -1,16 +1,15 @@
 package tlssynch
 
 import (
+	"github.com/transactrx/ncpdpDestination/pkg/pbmlib"
 	"crypto/tls"
 	"log"
 	"net"
 	"strconv"
 	"time"
-	//"github.com/transactrx/rxtransactionmodels/pkg/transaction"
-	"github.com/transactrx/ncpdpDestination/pkg/pbmlib"
 )
 
-const PBM_DATA_BUFFER = 16384
+
 func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte, map[string][]string, pbmlib.ErrorInfo) {
 
 	conn, err := Connect()
