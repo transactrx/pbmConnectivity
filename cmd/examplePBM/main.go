@@ -4,10 +4,10 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"time"
 
 	"github.com/transactrx/pbmConnectivity/pkg/global"
 	"github.com/transactrx/pbmConnectivity/pkg/tlssynch"
+	"github.com/transactrx/rxtransactionmodels/pkg/transaction"
 )
 
 func main() {
@@ -21,15 +21,18 @@ func main() {
 
 	config := make(map[string]interface{})
 
-	config["pbmUrl"] = "10.0.120.250"
+	config["pbmUrl"] = "10.0.120.252"
 	config["pbmPort"] = "5845"
 	config["pbmReceiveTimeOut"] = "20"
 
 
 	tlsCon.Start(config)
-	response,_,_ := tlsCon.Post([]byte("TESTING LIBRARY..."),nil,time.Duration(5))
-
-	log.Printf("%s",response)
+	response,_,err := tlsCon.Post([]byte("TESTING LIBRARY..."),nil)
+	if(err!=transaction.ErrorCode.TRX00){
+		log.Printf("tlsCon.Post failed: '%v'",err)
+	}else{
+		log.Printf("examplePBM response: '%s'",response)
+	}
 
 	c := make(chan os.Signal)
     signal.Notify(c, os.Interrupt)

@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"log"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/transactrx/rxtransactionmodels/pkg/transaction"
@@ -13,23 +14,27 @@ var counter int32 = 0
 
 const PBM_DATA_BUFFER = 16384
 
-func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string, timeOut time.Duration) ([]byte, map[string][]string, transaction.ErrorInfo) {
+func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte, map[string][]string, transaction.ErrorInfo) {
 
 	conn, err := Connect()
 	var responseBuffer []byte
 	bytesRead := 0
+	tmp,_ := strconv.Atoi(Cfg.PbmReceiveTimeOut)
+	timeOut := time.Duration(float64(tmp)*float64(time.Second))
+	
 	if err != transaction.ErrorCode.TRX00 {
 
 		log.Printf("Pbm.RouteTransaction ConnectToPbm failed, error: '%s'", err.Message)
 		//response.BuildResponseError(claim, errorCode, startTime)
 		return nil, nil, err
 	} else {
-		responseBuffer, bytesRead, err = SubmitRequest(string(claim), conn, timeOut*time.Second) // TODO read from env variables
+		responseBuffer, bytesRead, err = SubmitRequest(string(claim), conn,timeOut) // TODO read from env variables
 		if bytesRead <= 0 {
 			log.Printf("Pbm.RouteTransaction Post failed, error: %s", err.Message)
 			return responseBuffer, nil, err
 		}
 	}
+	log.Printf("TLSSyncConnect.Post response: '%s'",responseBuffer)
 	return responseBuffer, nil, transaction.ErrorCode.TRX00
 }
 
@@ -62,12 +67,12 @@ func Connect() (net.Conn, transaction.ErrorInfo) {
 		}
 		//return nil, pbmlib.ErrorCode.TRX03
 	}
-	return conn, transaction.ErrorCode.TRX00
+	return tlsConn, transaction.ErrorCode.TRX00
 }
 
 func SubmitRequest(claim string, conn net.Conn, timeout time.Duration) ([]byte, int, transaction.ErrorInfo) {
 
-	//defer conn.Close()
+	defer conn.Close()
 
 	log.Printf("Post data(16) %.16s time-out value: %f seconds", claim, timeout.Seconds())
 	// Set a read deadline for the connection
@@ -99,3 +104,6 @@ func SubmitRequest(claim string, conn net.Conn, timeout time.Duration) ([]byte, 
 	copy(responseBuffer, buffer[:bytesRead])
 	return responseBuffer, bytesRead, transaction.ErrorCode.TRX00
 }
+
+
+
