@@ -1,7 +1,7 @@
 package global
 
 import (
-	"github.com/transactrx/rxtransactionmodels/pkg/transaction"
+	"github.com/transactrx/ncpdpDestination/pkg/pbmlib"
 )
 
 type Claim struct{
@@ -11,7 +11,7 @@ type Claim struct{
 
 type PBMConnect interface {
 	Start(config map[string]interface{}) error
-	Post(claim []byte, header map[string][]string) ([]byte, map[string][]string, transaction.ErrorInfo) 
+	Post(claim []byte, header map[string][]string) ([]byte, map[string][]string, pbmlib.ErrorInfo) 
 	//Test(claim []byte) ([]byte, transaction.ErrorInfo)
 	Close() error
 }
