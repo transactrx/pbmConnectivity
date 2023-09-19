@@ -7,7 +7,8 @@ import (
 
 	"github.com/transactrx/pbmConnectivity/pkg/global"
 	"github.com/transactrx/pbmConnectivity/pkg/tlssynch"
-	"github.com/transactrx/rxtransactionmodels/pkg/transaction"
+	//"github.com/transactrx/rxtransactionmodels/pkg/transaction"
+	"github.com/transactrx/ncpdpDestination/pkg/pbmlib"
 )
 
 func main() {
@@ -23,7 +24,7 @@ func main() {
 	config["pbmReceiveTimeOut"] = "8"
 	tlsCon.Start(config)
 	response,_,err := tlsCon.Post([]byte("TESTING LIBRARY..."),nil)
-	if(err!=transaction.ErrorCode.TRX00){
+	if(err!=pbmlib.ErrorCode.TRX00){
 		log.Printf("tlsCon.Post failed: '%v'",err)
 	}else{
 		log.Printf("examplePBM response: '%s'",response)
