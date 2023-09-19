@@ -6,14 +6,10 @@ import (
 	"net"
 	"strconv"
 	"time"
-
 	"github.com/transactrx/rxtransactionmodels/pkg/transaction"
 )
 
-var counter int32 = 0
-
 const PBM_DATA_BUFFER = 16384
-
 func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte, map[string][]string, transaction.ErrorInfo) {
 
 	conn, err := Connect()
@@ -43,7 +39,6 @@ func Connect() (net.Conn, transaction.ErrorInfo) {
 	// Combine host and port into an address
 	address := Cfg.PbmUrl + ":" + Cfg.PbmPort
 	log.Printf("TLSSyncConnect.Connect connecting to '%s'", address)
-
 	// Create a TLS configuration
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true, // You might want to set this to false in production
@@ -77,7 +72,6 @@ func SubmitRequest(claim string, conn net.Conn, timeout time.Duration) ([]byte, 
 	log.Printf("TLSSyncConnect SubmitRequest data(16) %.16s time-out value: %f seconds", claim, timeout.Seconds())
 	// Set a read deadline for the connection
 	conn.SetReadDeadline(time.Now().Add(timeout))
-
 	// Send a message to the server
 	bytes, err := conn.Write([]byte(claim))
 	if err != nil {
@@ -86,7 +80,6 @@ func SubmitRequest(claim string, conn net.Conn, timeout time.Duration) ([]byte, 
 	} else {
 		log.Printf("TLSSyncConnect.SubmitRequest Write Snd %d bytes OK", bytes)
 	}
-
 	// Receive and print the response from the server
 	buffer := make([]byte, PBM_DATA_BUFFER)
 	bytesRead, err := conn.Read(buffer)
