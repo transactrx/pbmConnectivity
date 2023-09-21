@@ -10,7 +10,7 @@ type Config struct {
 	PbmPort           string
 	PbmReceiveTimeOut string
 }
-
+const PBM_DATA_BUFFER = 16384
 var Cfg Config
 
 func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
