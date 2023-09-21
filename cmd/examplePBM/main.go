@@ -16,8 +16,7 @@ func main() {
 	log.Printf("####################################################")
 	log.Printf("### PBMConnect Interface Example Using TLS Synch ###")
 	log.Printf("####################################################")
-	tlssynch := tlssynch.TLSSyncConnect{}
-	var tlsCon global.PBMConnect = &tlssynch
+	var tlsCon global.PBMConnect = &tlssynch.TLSSyncConnect{}
 	config := make(map[string]interface{})
 	config["pbmUrl"] = "10.0.120.250"
 	config["pbmPort"] = "5845"
