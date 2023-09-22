@@ -22,9 +22,12 @@ func main() {
 	config["pbmPort"] = "5845"
 	config["pbmReceiveTimeOut"] = "8"
 	tlsCon.Start(config)
-	response,_,err := tlsCon.Post([]byte("TESTING LIBRARY..."),nil)
+	header := map[string][]string{
+		"transmissionId":{"123456789"},
+	}
+	response,_,err := tlsCon.Post([]byte("<HEADER><DATA>"),header)
 	if(err!=pbmlib.ErrorCode.TRX00){
-		log.Printf("tlsCon.Post failed: '%v'",err)
+		log.Printf("tlsCon.post failed: '%v'",err)
 	}else{
 		log.Printf("examplePBM response: '%s'",response)
 	}
@@ -33,7 +36,7 @@ func main() {
     go func() {
         select {
         case sig := <-c:
-            log.Printf("Got %s signal. Aborting...\n", sig)
+            log.Printf("PBMConnect shutdown %s signal. Aborting...\n", sig)
             os.Exit(1)
         }
     }()
