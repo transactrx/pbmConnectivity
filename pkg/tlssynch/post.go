@@ -58,6 +58,7 @@ func Connect(tid string) (net.Conn, pbmlib.ErrorInfo) {
 	}
 	// Upgrade the connection to TLS
 	tlsConn := tls.Client(conn, tlsConfig)
+	tlsConn.SetReadDeadline(time.Now().Add(timeout))
 	// Handshake with the server
 	if err := tlsConn.Handshake(); err != nil {
 		log.Printf("tlssynch.connect tls handshake failed tid: %s error: '%s'", tid, err)
@@ -75,7 +76,7 @@ func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duratio
 
 	log.Printf("tlssynch.submitRequest tid: %s data(16) %.16s time-out value: %f seconds", tid, claim, timeout.Seconds())
 	// Set a read deadline for the connection
-	conn.SetReadDeadline(time.Now().Add(timeout))
+	//conn.SetReadDeadline(time.Now().Add(timeout))
 	// Send a message to the server
 	bytes, err := conn.Write([]byte(claim))
 	if err != nil {
@@ -86,6 +87,7 @@ func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duratio
 	}
 	// Receive and print the response from the server
 	buffer := make([]byte, PBM_DATA_BUFFER)
+	conn.SetReadDeadline(time.Now().Add(timeout))	
 	bytesRead, err := conn.Read(buffer)
 	if err != nil {		
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
