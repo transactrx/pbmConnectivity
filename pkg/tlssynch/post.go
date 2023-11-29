@@ -72,9 +72,11 @@ func Connect(tid string) (net.Conn, pbmlib.ErrorInfo) {
 
 func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duration) ([]byte, int, pbmlib.ErrorInfo) {
 
+	peerAddr := conn.RemoteAddr().String()
+	
 	defer conn.Close()
 
-	log.Printf("tlssynch.submitRequest tid: %s data(16) %.16s time-out value: %f seconds", tid, claim, timeout.Seconds())
+	log.Printf("tlssynch.submitRequest tid: %s data(16) %.16s time-out value: %f seconds url: %s", tid, claim, timeout.Seconds(),peerAddr)
 	// Set a read deadline for the connection
 	//conn.SetReadDeadline(time.Now().Add(timeout))
 	// Send a message to the server
