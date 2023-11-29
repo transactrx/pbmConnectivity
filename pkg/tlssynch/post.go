@@ -72,9 +72,11 @@ func Connect(tid string) (net.Conn, pbmlib.ErrorInfo) {
 
 func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duration) ([]byte, int, pbmlib.ErrorInfo) {
 
+	peerAddr := conn.RemoteAddr().String()
+	
 	defer conn.Close()
 
-	log.Printf("tlssynch.submitRequest tid: %s data(16) %.16s time-out value: %f seconds", tid, claim, timeout.Seconds())
+	log.Printf("tlssynch.submitRequest tid: %s data(16) %.16s time-out value: %f seconds url: %s", tid, claim, timeout.Seconds(),peerAddr)
 	// Set a read deadline for the connection
 	//conn.SetReadDeadline(time.Now().Add(timeout))
 	// Send a message to the server
@@ -98,7 +100,7 @@ func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duratio
 		if bytesRead > 0 { // check this case in case some good data was received
 			log.Printf("tlssynch.submitRequest tid: %s Read.error raised but bytesRead > 0 error: %s bytesRead: %d", tid, err, bytesRead)
 		} else {
-			log.Printf("tlssynch.submitRequest tid: %s Read failed error: %s", tid, err)
+			log.Printf("tlssynch.submitRequest tid: %s Read failed error: %s url: %s", tid, err,peerAddr)
 			return nil, 0, pbmlib.ErrorCode.TRX10
 		}
 	}
