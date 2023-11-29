@@ -22,16 +22,16 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 	conn, err := Connect(tid)
 	if err != pbmlib.ErrorCode.TRX00 {
 
-		log.Printf("tlssynch.Post tid: %s Connect failed, error: '%s'",tid ,err.Message)
+		log.Printf("tlssynch.Post tid: %s Connect failed, error: '%s'", tid, err.Message)
 		return nil, nil, err
 	} else {
-		responseBuffer, bytesRead, err = SubmitRequest(string(claim),tid, conn, timeOut) // TODO read from env variables
+		responseBuffer, bytesRead, err = SubmitRequest(string(claim), tid, conn, timeOut) // TODO read from env variables
 		if bytesRead <= 0 {
-			log.Printf("tlssynch.post tid: %s SubmitRequest failed, error: %s",tid,err.Message)
+			log.Printf("tlssynch.post tid: %s SubmitRequest failed, error: %s", tid, err.Message)
 			return responseBuffer, nil, err
 		}
 	}
-	log.Printf("tlssynch.post tid: %s response: '%s'", tid,responseBuffer)
+	log.Printf("tlssynch.post tid: %s response: '%s'", tid, responseBuffer)
 	return responseBuffer, nil, pbmlib.ErrorCode.TRX00
 }
 
@@ -39,7 +39,7 @@ func Connect(tid string) (net.Conn, pbmlib.ErrorInfo) {
 
 	// Combine host and port into an address
 	address := Cfg.PbmUrl + ":" + Cfg.PbmPort
-	log.Printf("tlssynch.connect tid: %s connecting to '%s'",tid,address)
+	log.Printf("tlssynch.connect tid: %s connecting to '%s'", tid, address)
 	// Create a TLS configuration
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true, // You might want to set this to false in production
@@ -50,53 +50,57 @@ func Connect(tid string) (net.Conn, pbmlib.ErrorInfo) {
 	conn, err := net.DialTimeout("tcp", address, timeout)
 	//net.DialTimeout()
 	if err != nil {
-		log.Printf("tlssynch.connect tid: %s failed, error: '%s'", tid,err)
+		log.Printf("tlssynch.connect tid: %s failed, error: '%s'", tid, err)
 		return nil, pbmlib.ErrorCode.TRX02
 		//return nil,models.ErrorMap
 	} else {
-		log.Printf("tlssynch.connect tid: %s connected to '%s' SUCCESS", tid,address)
+		log.Printf("tlssynch.connect tid: %s connected to '%s' SUCCESS", tid, address)
 	}
 	// Upgrade the connection to TLS
 	tlsConn := tls.Client(conn, tlsConfig)
 	// Handshake with the server
 	if err := tlsConn.Handshake(); err != nil {
-		log.Printf("tlssynch.connect tls handshake failed tid: %s error: '%s'",tid, err)
+		log.Printf("tlssynch.connect tls handshake failed tid: %s error: '%s'", tid, err)
 		if conn != nil {
 			conn.Close()
 		}
-		//return nil, pbmlib.ErrorCode.TRX03
+		return nil, pbmlib.ErrorCode.TRX03
 	}
 	return tlsConn, pbmlib.ErrorCode.TRX00
 }
 
-func SubmitRequest(claim string,tid string ,conn net.Conn, timeout time.Duration) ([]byte, int, pbmlib.ErrorInfo) {
+func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duration) ([]byte, int, pbmlib.ErrorInfo) {
 
 	defer conn.Close()
 
-	log.Printf("tlssynch.submit tid: %s data(16) %.16s time-out value: %f seconds",tid, claim, timeout.Seconds())
+	log.Printf("tlssynch.submitRequest tid: %s data(16) %.16s time-out value: %f seconds", tid, claim, timeout.Seconds())
 	// Set a read deadline for the connection
 	conn.SetReadDeadline(time.Now().Add(timeout))
 	// Send a message to the server
 	bytes, err := conn.Write([]byte(claim))
 	if err != nil {
-		log.Printf("tlssynch.submit tid: %s Write data error: '%s'",tid, err)
+		log.Printf("tlssynch.submitRequest tid: %s Write data error: '%s'", tid, err)
 		return nil, 0, pbmlib.ErrorCode.TRX10
 	} else {
-		log.Printf("tlssynch.submit tid: %s Write Snd %d bytes OK",tid, bytes)
+		log.Printf("tlssynch.submitRequest tid: %s Write Snd %d bytes OK", tid, bytes)
 	}
 	// Receive and print the response from the server
 	buffer := make([]byte, PBM_DATA_BUFFER)
 	bytesRead, err := conn.Read(buffer)
-	if err != nil {
+	if err != nil {		
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 			// Handle the read timeout error
-			log.Printf("tlssynch.submit tid: %s Read conn.Read failed timeout error: %s",tid, err)
+			log.Printf("tlssynch.submitRequest tid: %s Read conn.Read failed timeout error: %s", tid, err)
 			return nil, 0, pbmlib.ErrorCode.TRX05
+		}		
+		if bytesRead > 0 { // check this case in case some good data was received
+			log.Printf("tlssynch.submitRequest tid: %s Read.error raised but bytesRead > 0 error: %s bytesRead: %d", tid, err, bytesRead)
+		} else {
+			log.Printf("tlssynch.submitRequest tid: %s Read failed error: %s", tid, err)
+			return nil, 0, pbmlib.ErrorCode.TRX10
 		}
-		log.Printf("tlssynch.submit tid: %s Read failed error: %s",tid, err)
-		return nil, 0, pbmlib.ErrorCode.TRX10
 	}
-	log.Printf("tlssynch.submit tid: %s Rcvd: %d bytes",tid, bytesRead)
+	log.Printf("tlssynch.submitRequest tid: %s Rcvd: %d bytes", tid, bytesRead)
 	responseBuffer := make([]byte, bytesRead)
 	copy(responseBuffer, buffer[:bytesRead])
 	return responseBuffer, bytesRead, pbmlib.ErrorCode.TRX00
