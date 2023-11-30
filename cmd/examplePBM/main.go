@@ -20,7 +20,8 @@ func main() {
 	config := make(map[string]interface{})
 	config["pbmUrl"] = "10.0.120.250"
 	config["pbmPort"] = "5845"
-	config["pbmReceiveTimeOut"] = "8"
+	config["pbmReceiveTimeOut"] = "20"
+	config["pbmInsecureSkipVerify"] = true
 	tlsCon.Start(config)
 	header := map[string][]string{
 		"transmissionId":{"123456789"},
