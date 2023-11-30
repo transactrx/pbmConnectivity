@@ -39,7 +39,7 @@ func Connect(tid string) (net.Conn, pbmlib.ErrorInfo) {
 
 	// Combine host and port into an address
 	address := Cfg.PbmUrl + ":" + Cfg.PbmPort
-	log.Printf("tlssynch.connect tid: %s connecting to '%s' validate cert: %t", tid, address,Cfg.PbmInsecureSkipVerify)
+	log.Printf("tlssynch.connect tid: %s connecting to '%s' Pbm Certificate Insecure Skip Verify: %t", tid, address,Cfg.PbmInsecureSkipVerify)
 	// Create a TLS configuration
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: Cfg.PbmInsecureSkipVerify, // You might want to set this to false in production
