@@ -9,6 +9,7 @@ type Config struct {
 	PbmUrl            string
 	PbmPort           string
 	PbmReceiveTimeOut string
+	PbmInsecureSkipVerify bool
 }
 const PBM_DATA_BUFFER = 16384
 var Cfg Config
@@ -35,5 +36,13 @@ func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
 		log.Printf("Start receive time-out not Provided failed")
 	}
 
+	tmpBool, ok1 := cfgMap["pbmInsecureSkipVerify"].(bool)
+
+	if ok1 {
+		Cfg.PbmInsecureSkipVerify = tmpBool
+	} else {
+		log.Printf("PbmInsecureSkipVerify not Provided failed")
+		Cfg.PbmInsecureSkipVerify = false
+	}
 	return nil
 }
