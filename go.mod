@@ -5,7 +5,7 @@ go 1.21.0
 require github.com/transactrx/ncpdpDestination v0.0.7
 
 require (
-	github.com/google/uuid v1.4.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/compress v1.17.3 // indirect
 	github.com/nats-io/nats.go v1.31.0 // indirect
 	github.com/nats-io/nkeys v0.4.6 // indirect
