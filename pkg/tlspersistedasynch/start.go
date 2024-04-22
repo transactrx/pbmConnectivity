@@ -1,8 +1,11 @@
 package tlssynch
 
-import "log"
+import (
+	"log"
+	"time"
+)
 
-type TLSSyncConnect struct {
+type TLSASyncConnect struct {
 	test string
 }
 type Config struct {
@@ -14,7 +17,7 @@ type Config struct {
 const PBM_DATA_BUFFER = 16384
 var Cfg Config
 
-func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
+func (pc *TLSASyncConnect) Start(cfgMap map[string]interface{}) error {
 
 	tmp, ok := cfgMap["pbmUrl"].(string)
 	if ok {
@@ -44,5 +47,33 @@ func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
 		log.Printf("PbmInsecureSkipVerify not Provided failed")
 		Cfg.PbmInsecureSkipVerify = false
 	}
+	go ManagePbmConnections()
+	// ALL object creation needed to handle Asynch claims is needed 
+	
+	// 1. Create go routines to handle 
+       
+		// connection management with vendor 
+		// connect 
+		// reconnect 
+		// graceful socket closure 
+
+	// 2. Queue - thread safe  (claim queue )
+	// 3. Map  - generic thread safe map to store context (claim information)
+	// .... 
+
+
 	return nil
+}
+
+func ManagePbmConnections()  {
+
+	for {
+		
+
+		log.Printf("ManagePbmConnections....")
+		time.Sleep(10 * time.Second)
+	}
+
+
+	
 }
