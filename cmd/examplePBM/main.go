@@ -26,12 +26,23 @@ func main() {
 	header := map[string][]string{
 		"transmissionId":{"123456789"},
 	}
-	response,_,err := tlsCon.Post([]byte("<HEADER><DATA>"),header)
-	if(err!=pbmlib.ErrorCode.TRX00){
-		log.Printf("tlsCon.post failed: '%v'",err)
-	}else{
-		log.Printf("examplePBM response: '%s'",response)
-	}
+	
+	go func(){
+		response,_,err := tlsCon.Post([]byte("<HEADER><DATA>"),header)
+		if(err!=pbmlib.ErrorCode.TRX00){
+			log.Printf("tlsCon.post failed: '%v'",err)
+		}else{
+			log.Printf("examplePBM response: '%s'",response)
+		}
+	}()
+	func(){
+		response,_,err := tlsCon.Post([]byte("<HEADER><DATA>"),header)
+		if(err!=pbmlib.ErrorCode.TRX00){
+			log.Printf("tlsCon.post failed: '%v'",err)
+		}else{
+			log.Printf("examplePBM response: '%s'",response)
+		}
+	}()
 	c := make(chan os.Signal)
     signal.Notify(c, os.Interrupt)
     go func() {

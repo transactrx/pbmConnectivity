@@ -1,7 +1,14 @@
 BINARY_NAME=pbmconnecttlsSynchSample.exe
 
+
+
+
 hello:
 	echo "Hello"
+
+update: 
+	echo "refreshing libraries"
+	go get -u all
 
 build:
 	echo "building..."
