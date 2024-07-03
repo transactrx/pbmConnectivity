@@ -1,11 +1,11 @@
-package tlssynch
+package tlspersistedasynch
 
 import (
 	"log"
 	"time"
 )
 
-type TLSASyncConnect struct {
+type TLSPersistedASyncConnect struct {
 	test string
 }
 type Config struct {
@@ -17,7 +17,7 @@ type Config struct {
 const PBM_DATA_BUFFER = 16384
 var Cfg Config
 
-func (pc *TLSASyncConnect) Start(cfgMap map[string]interface{}) error {
+func (pc *TLSPersistedASyncConnect) Start(cfgMap map[string]interface{}) error {
 
 	tmp, ok := cfgMap["pbmUrl"].(string)
 	if ok {
