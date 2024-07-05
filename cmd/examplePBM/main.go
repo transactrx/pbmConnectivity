@@ -27,7 +27,7 @@ func main() {
 	config["pbmPort"] = "26301"
 	config["pbmReceiveTimeOut"] = "20"
 	config["pbmInsecureSkipVerify"] = true
-	config["pbmTotalChnls"] = "1"
+	config["pbmOutboundChnls"] = "1"
 	tlsCon.Start(config)
 	header := map[string][]string{
 		"transmissionId":{"123456789"},
