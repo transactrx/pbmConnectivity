@@ -9,15 +9,14 @@ type TLSPersistedSyncConnect struct {
 	test string
 }
 
-var Ctx* TlsContext
-
+var Ctx *TlsContext
 
 type Config struct {
 	PbmUrl                string
 	PbmPort               string
 	PbmReceiveTimeOut     string
 	PbmInsecureSkipVerify bool
-	PbmTotalChnls         int
+	PbmOutboundChnls      int
 }
 
 const PBM_DATA_BUFFER = 16384
@@ -25,7 +24,7 @@ const PBM_DATA_BUFFER = 16384
 var Cfg Config
 
 func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
-	
+
 	var err error
 	tmp, ok := cfgMap["pbmUrl"].(string)
 	if ok {
@@ -55,25 +54,25 @@ func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 		log.Printf("PbmInsecureSkipVerify not Provided failed")
 		Cfg.PbmInsecureSkipVerify = false
 	}
-	tmp, ok = cfgMap["pbmTotalChnls"].(string)
+	tmp, ok = cfgMap["pbmOutboundChnls"].(string)
 
 	if ok {
 		num, err := strconv.Atoi(tmp)
 		if err != nil {
-			log.Printf("Start strconv.Atoi failed error:  %s", err)						
-			Cfg.PbmTotalChnls = 2 // set default to 2
-		}else{
-			Cfg.PbmTotalChnls = num
+			log.Printf("Start strconv.Atoi failed error:  %s", err)
+			Cfg.PbmOutboundChnls = 2 // set default to 2
+		} else {
+			Cfg.PbmOutboundChnls = num
 		}
 	} else {
 		log.Printf("Total number of chnls not Provided failed")
 	}
-	// run TlsContext 
-	Ctx,err = NewTlsContext(Cfg)
-	 if err != nil {
-		log.Printf("Start NewTlsContext failed error: %s - critical",err)
-		panic(err)	 		 	
-	 }
+	// run TlsContext
+	Ctx, err = NewTlsContext(Cfg)
+	if err != nil {
+		log.Printf("Start NewTlsContext failed error: %s - critical", err)
+		panic(err)
+	}
 
 	return nil
 }
