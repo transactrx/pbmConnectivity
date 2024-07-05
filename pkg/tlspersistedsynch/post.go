@@ -8,7 +8,7 @@ import (
 
 func (pc *TLSPersistedSyncConnect) Post(claim []byte, header map[string][]string) ([]byte, map[string][]string, pbmlib.ErrorInfo) {
 
-	var responseBuffer []byte
+	//var responseBuffer []byte
 	tid := "Unknown-TID"
 	if values, ok := header["transmissionId"]; ok && len(values) > 0 {
 		tid = values[0]
@@ -35,5 +35,5 @@ func (pc *TLSPersistedSyncConnect) Post(claim []byte, header map[string][]string
 
 	log.Printf("Response: %s", string(response))
 
-	return responseBuffer, nil, pbmlib.ErrorCode.TRX00
+	return response, nil, pbmlib.ErrorCode.TRX00
 }
