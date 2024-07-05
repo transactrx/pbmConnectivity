@@ -27,6 +27,7 @@ type TlsContext struct {
 	sessions []*TlsSession
 	bitmap   []bool
 	mu       sync.Mutex
+	lastUsed   int
 }
 
 // NewTlsContext creates a new TlsContext with predefined sessions.
@@ -142,8 +143,6 @@ func (s *TlsSession) IsConnected() bool {
 	return s.connected
 }
 
-
-// FindConnection tries to find an available channel and waits if none are available
 func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
 	const waitDuration = 25 * time.Second
 	const retryInterval = 100 * time.Millisecond
@@ -152,11 +151,13 @@ func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
 
 	for {
 		ctx.mu.Lock()
-		for i, inUse := range ctx.bitmap {
-			if !inUse && ctx.sessions[i].IsConnected() {
-				ctx.bitmap[i] = true
+		for i := 0; i < len(ctx.sessions); i++ {
+			index := (ctx.lastUsed + i) % len(ctx.sessions)
+			if !ctx.bitmap[index] && ctx.sessions[index].IsConnected() {
+				ctx.bitmap[index] = true
+				ctx.lastUsed = index + 1  // Update the last used index
 				ctx.mu.Unlock()
-				return ctx.sessions[i], i, nil
+				return ctx.sessions[index], index, nil
 			}
 		}
 		ctx.mu.Unlock()
@@ -170,8 +171,7 @@ func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
 		// Wait before trying again
 		time.Sleep(retryInterval)
 	}
-}
-// FindConnection finds an available connection and marks it as used.
+}// FindConnection finds an available connection and marks it as used.
 // func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
 // 	ctx.mu.Lock()
 // 	defer ctx.mu.Unlock()
