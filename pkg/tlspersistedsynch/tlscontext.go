@@ -140,21 +140,50 @@ func (s *TlsSession) IsConnected() bool {
 	return s.connected
 }
 
-// FindConnection finds an available connection and marks it as used.
+
+// FindConnection tries to find an available channel and waits if none are available
 func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
-	ctx.mu.Lock()
-	defer ctx.mu.Unlock()
+	const waitDuration = 25 * time.Second
+	const retryInterval = 100 * time.Millisecond
 
-	log.Printf("FindConnection running...")
-	for i, inUse := range ctx.bitmap {
-		if !inUse && ctx.sessions[i].IsConnected() {
-			ctx.bitmap[i] = true
-			return ctx.sessions[i], i, nil
+	startTime := time.Now()
+
+	for {
+		ctx.mu.Lock()
+		log.Printf("FindConnection running...")
+		for i, inUse := range ctx.bitmap {
+			if !inUse && ctx.sessions[i].IsConnected() {
+				ctx.bitmap[i] = true
+				ctx.mu.Unlock()
+				return ctx.sessions[i], i, nil
+			}
 		}
-	}
+		ctx.mu.Unlock()
 
-	return nil, -1, fmt.Errorf("no available connection")
+		// If 25 seconds have passed, return an error
+		if time.Since(startTime) > waitDuration {
+			return nil, -1, fmt.Errorf("no available connection after waiting for 25 seconds")
+		}
+
+		// Wait before trying again
+		time.Sleep(retryInterval)
+	}
 }
+// FindConnection finds an available connection and marks it as used.
+// func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
+// 	ctx.mu.Lock()
+// 	defer ctx.mu.Unlock()
+
+// 	log.Printf("FindConnection running...")
+// 	for i, inUse := range ctx.bitmap {
+// 		if !inUse && ctx.sessions[i].IsConnected() {
+// 			ctx.bitmap[i] = true
+// 			return ctx.sessions[i], i, nil
+// 		}
+// 	}
+
+// 	return nil, -1, fmt.Errorf("no available connection")
+// }
 
 // ReleaseConnection releases a connection, making it available again.
 func (ctx *TlsContext) ReleaseConnection(index int) {
