@@ -19,6 +19,7 @@ type TlsSession struct {
 	mu        sync.Mutex
 	tlsConfig *tls.Config
 	appConfig Config
+	chnl      int 
 }
 
 // TlsContext manages multiple TLS sessions.
@@ -50,6 +51,7 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 			connected: false,
 			tlsConfig: tlsConfig,
 			appConfig: appCfg,
+			chnl:  i,
 		}
 		ctx.sessions[i] = session
 		go session.handleConnection()
@@ -66,14 +68,14 @@ func (s *TlsSession) handleConnection() {
     go func() {
         for {
             if s.IsConnected() {
-				log.Printf("READING... go-routine")
+				log.Printf("TlsSession[%d] reading...",s.chnl)
                 bytes, err := s.conn.Read(readBuffer)
                 if err != nil {
-                    log.Printf("Read error: %s", err)
+                    log.Printf("TlsSession[%d] Read error: %s",s.chnl,err)
                     s.setConnected(false)
                     continue
                 }
-                log.Printf("Read %d bytes %s", bytes, string(readBuffer[:bytes]))
+                log.Printf("TlsSession[%d] Read %d bytes %s",s.chnl, bytes, string(readBuffer[:bytes]))
                 s.readCh <- readBuffer[:bytes]
             } else {
                 // If not connected, just yield the CPU to avoid busy waiting
@@ -85,7 +87,7 @@ func (s *TlsSession) handleConnection() {
     for {
         if !s.IsConnected() {
             if err := s.reconnect(); err != nil {
-                log.Printf("Reconnection failed: %s", err)
+                log.Printf("TlsSession[%d] Reconnection failed: %s",s.chnl ,err)
                 time.Sleep(5 * time.Second)
                 continue
             }
@@ -93,14 +95,14 @@ func (s *TlsSession) handleConnection() {
 
         select {
         case data := <-s.writeCh:
-            log.Printf("writing.... <-s.writeCh")
+            
             bytes, err := s.conn.Write(data)
             if err != nil {
-                log.Printf("Write error: %s", err)
+                log.Printf("TlsSession[%d] Write failed: %s",s.chnl ,err)
                 s.setConnected(false)
                 continue
             } else {
-                log.Printf("Snd %d bytes", bytes)
+                log.Printf("TlsSession[%d] Snd %d bytes",s.chnl ,bytes)
             }
         case <-s.closeCh:
             return
@@ -115,12 +117,12 @@ func (s *TlsSession) handleConnection() {
 func (s *TlsSession) reconnect() error {
 	//s.mu.Lock()
 	//defer s.mu.Unlock()
-	log.Printf("tlssynch.connect connecting to '%s' Pbm Certificate Insecure Skip Verify: %t", s.address, s.appConfig.PbmInsecureSkipVerify)
+	log.Printf("TlsSession[%d] connect connecting to '%s' Pbm Certificate Insecure Skip Verify: %t", s.chnl,s.address, s.appConfig.PbmInsecureSkipVerify)
 	conn, err := tls.Dial("tcp", s.address, s.tlsConfig)
 	if err != nil {
 		return err
 	}
-	log.Printf("tlssynch.connect connected to '%s'", s.address)
+	log.Printf("TlsSession[%d] connect connected to '%s'",s.chnl ,s.address)
 	s.conn = conn
 	s.setConnected(true)
 	return nil
@@ -150,7 +152,6 @@ func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
 
 	for {
 		ctx.mu.Lock()
-		log.Printf("FindConnection running...")
 		for i, inUse := range ctx.bitmap {
 			if !inUse && ctx.sessions[i].IsConnected() {
 				ctx.bitmap[i] = true
@@ -162,6 +163,7 @@ func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
 
 		// If 25 seconds have passed, return an error
 		if time.Since(startTime) > waitDuration {
+			log.Printf("TlsContext FindConnection failed to find chnl - timer expired")
 			return nil, -1, fmt.Errorf("no available connection after waiting for 25 seconds")
 		}
 
