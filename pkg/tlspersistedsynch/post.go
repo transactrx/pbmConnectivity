@@ -20,7 +20,7 @@ func (pc *TLSPersistedSyncConnect) Post(claim []byte, header map[string][]string
 		log.Printf("tlspersistedsynch.post tid: %s no channel found", tid)	
 		return nil, nil, pbmlib.ErrorCode.TRX10
 	}
-	log.Printf("tlspersistedsynch.post tid: %s index: %d data: %s", tid,index,claim)
+	log.Printf("tlspersistedsynch.post tid: %s chnl: %d", tid,index)
 	err = Ctx.Write(index,claim)
 	if err != nil {
 		log.Printf("tlspersistedsynch.post tid: %s write failed", tid)	
@@ -33,7 +33,7 @@ func (pc *TLSPersistedSyncConnect) Post(claim []byte, header map[string][]string
 	}
 	Ctx.ReleaseConnection(index)
 
-	log.Printf("Response: %s", string(response))
+	//log.Printf("Response: %s", string(response))
 
 	return response, nil, pbmlib.ErrorCode.TRX00
 }

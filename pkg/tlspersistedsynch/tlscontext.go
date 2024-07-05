@@ -76,7 +76,7 @@ func (s *TlsSession) handleConnection() {
                     s.setConnected(false)
                     continue
                 }
-                log.Printf("TlsSession[%d] Read %d bytes %s",s.chnl, bytes, string(readBuffer[:bytes]))
+                log.Printf("TlsSession[%d] Rcvd %d bytes",s.chnl, bytes)
                 s.readCh <- readBuffer[:bytes]
             } else {
                 // If not connected, just yield the CPU to avoid busy waiting
