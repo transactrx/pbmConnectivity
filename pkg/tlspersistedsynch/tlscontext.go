@@ -1,9 +1,11 @@
 package tlspersistedsynch
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"log"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -117,7 +119,7 @@ func (s *TlsSession) handleConnection() {
 // reconnect attempts to reconnect the TLS session.
 func (s *TlsSession) reconnect() error {
 	//s.mu.Lock()
-	//defer s.mu.Unlock()
+	//defer s.mu.Unlock()	
 	log.Printf("TlsSession[%d] connect connecting to '%s' Pbm Certificate Insecure Skip Verify: %t", s.chnl, s.address, s.appConfig.PbmInsecureSkipVerify)
 	conn, err := tls.Dial("tcp", s.address, s.tlsConfig)
 	if err != nil {
@@ -143,8 +145,11 @@ func (s *TlsSession) IsConnected() bool {
 	return s.connected
 }
 
-func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
-	const waitDuration = 25 * time.Second
+func (ctx *TlsContext) FindConnection() (*TlsSession, int ,error) {
+
+	tmp,_ := strconv.Atoi(Cfg.PbmReceiveTimeOut)
+	maxTime := time.Duration(tmp-9) // that time-out is normally 29 ->> so 29-9 = 20 to find a chnl 
+	waitDuration := maxTime  * time.Second
 	const retryInterval = 100 * time.Millisecond
 
 	startTime := time.Now()
@@ -172,20 +177,6 @@ func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
 		time.Sleep(retryInterval)
 	}
 } // FindConnection finds an available connection and marks it as used.
-// func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
-// 	ctx.mu.Lock()
-// 	defer ctx.mu.Unlock()
-
-// 	log.Printf("FindConnection running...")
-// 	for i, inUse := range ctx.bitmap {
-// 		if !inUse && ctx.sessions[i].IsConnected() {
-// 			ctx.bitmap[i] = true
-// 			return ctx.sessions[i], i, nil
-// 		}
-// 	}
-
-// 	return nil, -1, fmt.Errorf("no available connection")
-// }
 
 // ReleaseConnection releases a connection, making it available again.
 func (ctx *TlsContext) ReleaseConnection(index int) {
@@ -208,17 +199,30 @@ func (ctx *TlsContext) Write(index int, data []byte) error {
 	return nil
 }
 
-// Read receives the response from a connection.
-func (ctx *TlsContext) Read(index int) ([]byte, error) {
-	session := ctx.sessions[index]
-	session.mu.Lock()
-	defer session.mu.Unlock()
+func (ctx *TlsContext) Read(appCtx context.Context, index int) ([]byte, error) {
+    session := ctx.sessions[index]
+    session.mu.Lock()
+    defer session.mu.Unlock()
 
-	select {
-	case data := <-session.readCh:
-		return data, nil
-	}
+    select {
+    case data := <-session.readCh:
+        return data, nil
+    case <-appCtx.Done():
+        return nil, appCtx.Err() // Return the context error, typically context.DeadlineExceeded
+    }
 }
+
+// // Read receives the response from a connection.
+// func (ctx *TlsContext) Read(index int) ([]byte, error) {
+// 	session := ctx.sessions[index]
+// 	session.mu.Lock()
+// 	defer session.mu.Unlock()
+
+// 	select {
+// 	case data := <-session.readCh:
+// 		return data, nil
+// 	}
+// }
 
 // Close closes all TLS sessions.
 func (ctx *TlsContext) Close() {
