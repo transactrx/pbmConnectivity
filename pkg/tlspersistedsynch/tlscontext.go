@@ -152,8 +152,8 @@ func (ctx *TlsContext) FindConnection() (*TlsSession, int ,error) {
 	waitDuration := maxTime  * time.Second
 	const retryInterval = 100 * time.Millisecond
 
-	startTime := time.Now()
-
+	startTime := time.Now()	
+    
 	for {
 		ctx.mu.Lock()
 		for i := 0; i < len(ctx.sessions); i++ {
@@ -167,11 +167,14 @@ func (ctx *TlsContext) FindConnection() (*TlsSession, int ,error) {
 		}
 		ctx.mu.Unlock()
 
-		// If 25 seconds have passed, return an error
-		if time.Since(startTime) > waitDuration {
-			log.Printf("TlsContext FindConnection failed to find chnl - timer expired")
-			return nil, -1, fmt.Errorf("no available connection after waiting for 25 seconds")
-		}
+		elapsed := time.Since(startTime)
+        log.Printf("Elapsed time: %v waitDuration: %v", elapsed,waitDuration)
+
+        // If waitDuration seconds have passed, return an error
+        if elapsed > waitDuration {
+            log.Printf("TlsContext FindConnection failed to find chnl - timer expired after %v", elapsed)
+            return nil, -1, fmt.Errorf("no available connection after waiting for %v seconds", maxTime)
+        }
 
 		// Wait before trying again
 		time.Sleep(retryInterval)
