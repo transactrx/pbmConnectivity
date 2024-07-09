@@ -15,6 +15,7 @@ type Config struct {
 	PbmUrl                string
 	PbmPort               string
 	PbmReceiveTimeOut     string
+	PbmQueueTimeOut       string 
 	PbmInsecureSkipVerify bool
 	PbmOutboundChnls      int
 }
@@ -66,6 +67,13 @@ func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 		}
 	} else {
 		log.Printf("Total number of chnls not Provided failed")
+	}
+	tmp, ok = cfgMap["pbmQueueTimeOut"].(string)
+
+	if ok {
+		Cfg.PbmQueueTimeOut = tmp
+	} else {
+		log.Printf("Start queue time-out not Provided failed")
 	}
 	// run TlsContext
 	Ctx, err = NewTlsContext(Cfg)

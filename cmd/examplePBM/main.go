@@ -23,9 +23,10 @@ func main() {
 
 	// prime testing over tls 10.0.205.1:26301
 
-	config["pbmUrl"] = "10.0.205.1"
-	config["pbmPort"] = "26301"
-	config["pbmReceiveTimeOut"] = "20"
+	config["pbmUrl"] = "10.0.2.32"
+	config["pbmPort"] = "20001"
+	config["pbmReceiveTimeOut"] = "28"
+	config["pbmQueueTimeOut"] = "20"
 	config["pbmInsecureSkipVerify"] = true
 	config["pbmOutboundChnls"] = "1"
 	tlsCon.Start(config)
@@ -33,7 +34,7 @@ func main() {
 		"transmissionId":{"123456789"},
 	}
 
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 2)
 
 
     claim := "0210032   000019                       D0B11A076000100        20230316AM25C2123456789AM29CABUBOCHKACBFOMINC419690609AM21ANRF3241025545163007968FA03FB05FBCYFB25AM22EM1D21"
