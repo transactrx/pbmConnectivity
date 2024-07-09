@@ -74,7 +74,7 @@ func (s *TlsSession) handleConnection() {
 				log.Printf("TlsSession[%d] reading...", s.chnl)
 				bytes, err := s.conn.Read(readBuffer)
 				if err != nil {
-					log.Printf("TlsSession[%d] Read error: %s", s.chnl, err)
+					log.Printf("TlsSession[%d] Read failed: %s", s.chnl, err)
 					s.setConnected(false)
 					continue
 				}
@@ -147,8 +147,8 @@ func (s *TlsSession) IsConnected() bool {
 
 func (ctx *TlsContext) FindConnection() (*TlsSession, int ,error) {
 
-	tmp,_ := strconv.Atoi(Cfg.PbmReceiveTimeOut)
-	maxTime := time.Duration(tmp-9) // that time-out is normally 29 ->> so 29-9 = 20 to find a chnl 
+	tmp,_ := strconv.Atoi(Cfg.PbmQueueTimeOut)
+	maxTime := time.Duration(tmp) 
 	waitDuration := maxTime  * time.Second
 	const retryInterval = 100 * time.Millisecond
 
@@ -168,7 +168,7 @@ func (ctx *TlsContext) FindConnection() (*TlsSession, int ,error) {
 		ctx.mu.Unlock()
 
 		elapsed := time.Since(startTime)
-        log.Printf("Elapsed time: %v waitDuration: %v", elapsed,waitDuration)
+        //log.Printf("Elapsed time: %v waitDuration: %v", elapsed,waitDuration)
 
         // If waitDuration seconds have passed, return an error
         if elapsed > waitDuration {
