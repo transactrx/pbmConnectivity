@@ -41,7 +41,7 @@ func (pc *TLSPersistedSyncConnect) Post(claim []byte, header map[string][]string
 			Ctx.ReleaseConnection(index)
 			return nil, nil, pbmlib.ErrorCode.TRX05
 		} else {
-			log.Printf("tlspersistedsynch.post tid: %s read failed error: %v", err)
+			log.Printf("tlspersistedsynch.post tid: %s read failed error: %v",tid ,err)
 			Ctx.ReleaseConnection(index)
 			return nil, nil, pbmlib.ErrorCode.TRX10
 		}
