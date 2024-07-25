@@ -156,7 +156,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 		for {
 			if s.IsConnected() {
 				log.Printf("TlsSession[%d] reading...", s.chnl)
-				bytes, err := s.conn.Read(readBuffer)
+				bytes, err := s.conn.Read(readBuffer)				
 				if err != nil {
 					log.Printf("TlsSession[%d] Read failed: %s", s.chnl, err)
 					s.setConnected(false)
@@ -283,12 +283,13 @@ func (ctx *TlsContext) Write(index int, data []byte) error {
 
 func (ctx *TlsContext) Read(appCtx context.Context, index int) ([]byte, error) {
 	session := ctx.sessions[index]
-	session.mu.Lock()
-	defer session.mu.Unlock()
+	//session.mu.Lock()
+	//defer session.mu.Unlock()
 
 	select {
 	case data := <-session.readCh:
-		ctx.ClearError(index)
+		log.Printf("read some data... data len: %d",len(data))
+		//ctx.ClearError(index)
 		return data, nil
 	case <-appCtx.Done():
 		ctx.IncrementError(index)
