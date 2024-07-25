@@ -3,6 +3,7 @@ package tlspersistedsynch
 import (
 	"log"
 	"strconv"
+	"strings"
 )
 
 type TLSPersistedSyncConnect struct {
@@ -12,12 +13,14 @@ type TLSPersistedSyncConnect struct {
 var Ctx *TlsContext
 
 type Config struct {
-	PbmUrl                string
+	PbmUrl                []string
 	PbmPort               string
 	PbmReceiveTimeOut     string
 	PbmQueueTimeOut       string 
 	PbmInsecureSkipVerify bool
 	PbmOutboundChnls      int
+	PbmActiveSites        []bool
+
 }
 
 const PBM_DATA_BUFFER = 16384
@@ -29,9 +32,18 @@ func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 	var err error
 	tmp, ok := cfgMap["pbmUrl"].(string)
 	if ok {
-		Cfg.PbmUrl = tmp
+		
+		urlSites := strings.Split(tmp, ",")
+		Cfg.PbmUrl = make([]string,len(urlSites))
+		for i, v := range urlSites {
+			if v == "true" {
+				Cfg.PbmUrl[i] = v
+			}else{
+				Cfg.PbmUrl[i] = v
+			}			
+		}
 	} else {
-		log.Printf("Start Url not Provided failed")
+		log.Printf("Start Url(s) not Provided failed")
 	}
 	tmp, ok = cfgMap["pbmPort"].(string)
 	if ok {
@@ -75,6 +87,26 @@ func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 	} else {
 		log.Printf("Start queue time-out not Provided failed")
 	}
+	tmp, ok = cfgMap["pbmActiveSites"].(string) // idea is to provide a comma delimitted boolean values (e.g true,false,true,false,.... site-n 
+	if ok {		
+		activeSites := strings.Split(tmp, ",")
+		Cfg.PbmActiveSites = make([]bool,len(activeSites))
+		for i, v := range activeSites {
+			if v == "true" {
+				Cfg.PbmActiveSites[i] = true
+			}else{
+				Cfg.PbmActiveSites[i] = false
+			}			
+		}
+
+		log.Printf("values are %v",Cfg.PbmActiveSites)
+
+
+		//Cfg.PbmQueueTimeOut = tmp
+	} else {
+		log.Printf("Start site(s) status not Provided failed")
+	}
+
 	// run TlsContext
 	Ctx, err = NewTlsContext(Cfg)
 	if err != nil {
