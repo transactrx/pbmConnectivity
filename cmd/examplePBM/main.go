@@ -25,11 +25,11 @@ func main() {
 
 	config["pbmUrl"] = "10.0.205.1,10.0.2.32"
 	config["pbmPort"] = "26301"
-	config["pbmReceiveTimeOut"] = "5"
+	config["pbmReceiveTimeOut"] = "25"
 	config["pbmQueueTimeOut"] = "20"
 	config["pbmInsecureSkipVerify"] = true
-	config["pbmOutboundChnls"] = "4"
-	config["pbmActiveSites"] = "true,true"
+	config["pbmOutboundChnls"] = "1"
+	config["pbmActiveSites"] = "true,false"
 	
 	tlsCon.Start(config)
 	header := map[string][]string{
@@ -39,7 +39,7 @@ func main() {
 	time.Sleep(time.Second * 2)
 
 
-    claim := "0210032   000019                       D0B11A076000100        20230316AM25C2123456789AM29CABUBOCHKACBFOMINC419690609AM21ANRF3241025545163007968FA03FB05FBCYFB25AM22EM1D21"
+    claim := "011552D0B1BCTX      1076000100        20220418FAMULUS   AM04C2123456789C61C90CCTESTCDTESTAM01C419000501C52C701CATESTCBCLAIMCM123 ANY STREETCNFORT WORTHCOTXCP76102CX01CY0000000004X01AM07EM1D27418529E103D768727010001U701C800D300D5030D61D81DE20210210DF06DI00DJ4E70000540000EU0028MLAM11D90183936{DN01DQ0183936{DU0183936{AM032JDIANE2K2160 TEST ADDY2MFORT WORTH2NTX2P76107EZ01DB1234567891DRTESTPHY"
 
 
 	go func(){

@@ -30,6 +30,7 @@ func (pc *TLSPersistedSyncConnect) Post(claim []byte, header map[string][]string
 		log.Printf("tlspersistedsynch.post tid: %s write failed", tid)
 		return nil, nil, pbmlib.ErrorCode.TRX10
 	}
+	log.Printf("READING.....")
 	// Create a context with a timeout
 	appCtx, cancel := context.WithTimeout(context.Background(), time.Duration(readTimeOut)*time.Second) // adjust the timeout as needed
 	defer cancel()
