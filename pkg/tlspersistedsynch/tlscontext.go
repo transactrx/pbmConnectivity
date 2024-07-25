@@ -198,6 +198,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				log.Printf("TlsSession[%d] Snd %d bytes", s.chnl, bytes)
 			}
 		case <-s.closeCh:
+			s.conn.Close()
 			return
 		default:
 			// Optional: Add a short sleep to prevent busy waiting in the select loop
@@ -289,7 +290,7 @@ func (ctx *TlsContext) Read(appCtx context.Context, index int) ([]byte, error) {
 	select {
 	case data := <-session.readCh:
 		log.Printf("read some data... data len: %d",len(data))
-		//ctx.ClearError(index)
+		ctx.ClearError(index)
 		return data, nil
 	case <-appCtx.Done():
 		ctx.IncrementError(index)
