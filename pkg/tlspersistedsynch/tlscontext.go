@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	//"strings"
 	"sync"
 	"time"
 )
@@ -98,16 +97,12 @@ func (ctx *TlsContext) SetSiteStatus(index int, active bool) {
 }
 
 func (ctx *TlsContext) IncrementError(index int) {
-	ctx.mu.Lock()
-	defer ctx.mu.Unlock()
 	ctx.sessions[index].mu.Lock()
 	ctx.sessions[index].errors++
 	ctx.sessions[index].mu.Unlock()
 }
 
 func (ctx *TlsContext) ClearError(index int) {
-	ctx.mu.Lock()
-	defer ctx.mu.Unlock()
 	ctx.sessions[index].mu.Lock()
 	ctx.sessions[index].errors = 0 
 	ctx.sessions[index].mu.Unlock()
@@ -115,8 +110,6 @@ func (ctx *TlsContext) ClearError(index int) {
 
 
 func (ctx *TlsContext) DisconnectSession(index int) {
-	ctx.mu.Lock()
-	defer ctx.mu.Unlock()
 	ctx.sessions[index].mu.Lock()
 	defer ctx.sessions[index].mu.Unlock()
 
@@ -234,6 +227,34 @@ func (s *TlsSession) IsConnected() bool {
 	return s.connected
 }
 
+
+func (session *TlsSession) Read(appCtx context.Context, index int) ([]byte, error) {
+	//session := s
+	//session.mu.Lock()
+	//defer session.mu.Unlock()
+
+	select {
+	case data := <-session.readCh:
+		log.Printf("read some data... data len: %d",len(data))
+		//ctx.ClearError(index)
+		return data, nil
+	case <-appCtx.Done():
+		//ctx.IncrementError(index)
+		return nil, appCtx.Err() // Return the context error, typically context.DeadlineExceeded
+	}
+}
+// Write sends data through a connection.
+func (session *TlsSession) Write(index int, data []byte) error {
+	log.Printf("Writing %d bytes on chnl: %d", len(data), index)
+	//session := s
+	session.writeCh <- data
+	return nil
+}
+
+// ##########################################################
+// #################### CONTEXT FUNCTIONS ################### 
+// ##########################################################
+
 func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
 	tmp, _ := strconv.Atoi(Cfg.PbmQueueTimeOut)
 	maxTime := time.Duration(tmp)
@@ -297,6 +318,7 @@ func (ctx *TlsContext) Read(appCtx context.Context, index int) ([]byte, error) {
 		return nil, appCtx.Err() // Return the context error, typically context.DeadlineExceeded
 	}
 }
+
 
 // Close closes all TLS sessions.
 func (ctx *TlsContext) Close() {

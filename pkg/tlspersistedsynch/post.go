@@ -17,15 +17,15 @@ func (pc *TLSPersistedSyncConnect) Post(claim []byte, header map[string][]string
 	if values, ok := header["transmissionId"]; ok && len(values) > 0 {
 		tid = values[0]
 	}
-	log.Printf("tlspersistedsynch.post tid: %s running", tid)
+	log.Printf("tlspersistedsynch.post tid: %s finding chnl...", tid)
 
-	_, index, err := Ctx.FindConnection()
+	session , index, err := Ctx.FindConnection()
 	if err != nil {
 		log.Printf("tlspersistedsynch.post tid: %s no channel found", tid)
 		return nil, nil, pbmlib.ErrorCode.TRX10
 	}
 	log.Printf("tlspersistedsynch.post tid: %s chnl: %d", tid, index)
-	err = Ctx.Write(index, claim)
+	err = session.Write(index, claim)
 	if err != nil {
 		log.Printf("tlspersistedsynch.post tid: %s write failed", tid)
 		return nil, nil, pbmlib.ErrorCode.TRX10
@@ -35,8 +35,9 @@ func (pc *TLSPersistedSyncConnect) Post(claim []byte, header map[string][]string
 	appCtx, cancel := context.WithTimeout(context.Background(), time.Duration(readTimeOut)*time.Second) // adjust the timeout as needed
 	defer cancel()
 
-	response, err := Ctx.Read(appCtx, index)
+	response, err := session.Read(appCtx, index)
 	if err != nil {
+		Ctx.IncrementError(index)
 		if err == context.DeadlineExceeded {
 			log.Printf("tlspersistedsynch.post tid: %s read failed error: timeout", tid)
 			Ctx.ReleaseConnection(index)
@@ -48,6 +49,7 @@ func (pc *TLSPersistedSyncConnect) Post(claim []byte, header map[string][]string
 		}
 
 	}
+	Ctx.ClearError(index)
 	Ctx.ReleaseConnection(index)
 
 	//log.Printf("Response: %s", string(response))
