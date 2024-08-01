@@ -235,7 +235,7 @@ func (session *TlsSession) Read(appCtx context.Context, index int) ([]byte, erro
 
 	select {
 	case data := <-session.readCh:
-		log.Printf("read some data... data len: %d",len(data))
+		log.Printf("TlsSession[%d] %d bytes received",index,len(data))
 		//ctx.ClearError(index)
 		return data, nil
 	case <-appCtx.Done():
