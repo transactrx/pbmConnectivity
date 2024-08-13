@@ -27,7 +27,7 @@ type TlsSession struct {
 	tlsConfig *tls.Config
 	appConfig Config
 	chnl      int
-	errors    int 
+	errors    int
 }
 
 // TlsContext manages multiple TLS sessions.
@@ -60,7 +60,7 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: appCfg.PbmInsecureSkipVerify, // You might want to set this to false in production
-		
+
 	}
 
 	// Assign sessions to sites
@@ -104,10 +104,9 @@ func (ctx *TlsContext) IncrementError(index int) {
 
 func (ctx *TlsContext) ClearError(index int) {
 	ctx.sessions[index].mu.Lock()
-	ctx.sessions[index].errors = 0 
+	ctx.sessions[index].errors = 0
 	ctx.sessions[index].mu.Unlock()
 }
-
 
 func (ctx *TlsContext) DisconnectSession(index int) {
 	ctx.sessions[index].mu.Lock()
@@ -116,7 +115,7 @@ func (ctx *TlsContext) DisconnectSession(index int) {
 	if ctx.sessions[index].connected {
 		ctx.sessions[index].connected = false
 		ctx.sessions[index].conn.Close()
-		ctx.sessions[index].errors = 0 // Reset error count
+		ctx.sessions[index].errors = 0     // Reset error count
 		close(ctx.sessions[index].closeCh) // Signal close
 	}
 }
@@ -149,9 +148,13 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 		for {
 			if s.IsConnected() {
 				log.Printf("TlsSession[%d] reading...", s.chnl)
-				bytes, err := s.conn.Read(readBuffer)				
+				bytes, err := s.conn.Read(readBuffer)
 				if err != nil {
+					s.mu.Lock()
+					s.conn = nil
+					s.mu.Unlock()
 					log.Printf("TlsSession[%d] Read failed: %s", s.chnl, err)
+					time.Sleep(1 * time.Second) // wait one second to reconnect
 					s.setConnected(false)
 					continue
 				}
@@ -182,16 +185,24 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 
 		select {
 		case data := <-s.writeCh:
-			bytes, err := s.conn.Write(data)
-			if err != nil {
-				log.Printf("TlsSession[%d] Write failed: %s", s.chnl, err)
-				s.setConnected(false)
-				continue
-			} else {
-				log.Printf("TlsSession[%d] Snd %d bytes", s.chnl, bytes)
+			if s.conn != nil {
+				bytes, err := s.conn.Write(data)
+				if err != nil {
+					log.Printf("TlsSession[%d] Write failed: %s", s.chnl, err)
+					s.setConnected(false)
+					continue
+				} else {
+					log.Printf("TlsSession[%d] Snd %d bytes", s.chnl, bytes)
+				}
+			}else{
+					log.Printf("TlsSession[%d] Write failed connection object is nil", s.chnl)				
 			}
+
 		case <-s.closeCh:
-			s.conn.Close()
+			if s.conn != nil {
+				s.conn.Close()
+			}
+
 			return
 		default:
 			// Optional: Add a short sleep to prevent busy waiting in the select loop
@@ -208,7 +219,9 @@ func (s *TlsSession) reconnect() error {
 		return err
 	}
 	log.Printf("TlsSession[%d] connect connected to '%s'", s.chnl, s.address)
+	s.mu.Lock()
 	s.conn = conn
+	s.mu.Unlock()
 	s.setConnected(true)
 	return nil
 }
@@ -227,7 +240,6 @@ func (s *TlsSession) IsConnected() bool {
 	return s.connected
 }
 
-
 func (session *TlsSession) Read(appCtx context.Context, index int) ([]byte, error) {
 	//session := s
 	//session.mu.Lock()
@@ -235,7 +247,7 @@ func (session *TlsSession) Read(appCtx context.Context, index int) ([]byte, erro
 
 	select {
 	case data := <-session.readCh:
-		log.Printf("TlsSession[%d] %d bytes received",index,len(data))
+		log.Printf("TlsSession[%d] %d bytes received", index, len(data))
 		//ctx.ClearError(index)
 		return data, nil
 	case <-appCtx.Done():
@@ -243,6 +255,7 @@ func (session *TlsSession) Read(appCtx context.Context, index int) ([]byte, erro
 		return nil, appCtx.Err() // Return the context error, typically context.DeadlineExceeded
 	}
 }
+
 // Write sends data through a connection.
 func (session *TlsSession) Write(index int, data []byte) error {
 	log.Printf("Writing %d bytes on chnl: %d", len(data), index)
@@ -252,7 +265,7 @@ func (session *TlsSession) Write(index int, data []byte) error {
 }
 
 // ##########################################################
-// #################### CONTEXT FUNCTIONS ################### 
+// #################### CONTEXT FUNCTIONS ###################
 // ##########################################################
 
 func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
@@ -310,7 +323,7 @@ func (ctx *TlsContext) Read(appCtx context.Context, index int) ([]byte, error) {
 
 	select {
 	case data := <-session.readCh:
-		log.Printf("read some data... data len: %d",len(data))
+		log.Printf("read some data... data len: %d", len(data))
 		ctx.ClearError(index)
 		return data, nil
 	case <-appCtx.Done():
@@ -318,7 +331,6 @@ func (ctx *TlsContext) Read(appCtx context.Context, index int) ([]byte, error) {
 		return nil, appCtx.Err() // Return the context error, typically context.DeadlineExceeded
 	}
 }
-
 
 // Close closes all TLS sessions.
 func (ctx *TlsContext) Close() {
