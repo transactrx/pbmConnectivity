@@ -172,7 +172,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					log.Printf("TlsSession[%d] Reconnection failed: %s", s.chnl, err)
 					time.Sleep(5 * time.Second)
 					continue
-				}				
+				}
 				log.Printf("TlsSession[%d] Pausing to ensure LB is connected to vendor", s.chnl)
 				time.Sleep(6 * time.Second)
 				s.setConnected(true)
@@ -181,7 +181,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 	}()
 
 	for {
-		
+
 		select {
 		case data := <-s.writeCh:
 			if s.IsConnected() && s.conn != nil {
@@ -199,10 +199,10 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 
 		case <-s.closeCh:
 			log.Printf("TlsSession[%d] before closing connection", s.chnl)
-			if s.conn != nil {
-				log.Printf("TlsSession[%d] closing connection", s.chnl)
-				s.conn.Close()
-			}
+			//if s.conn != nil {
+			log.Printf("TlsSession[%d] closing connection", s.chnl)
+			s.conn.Close()
+			//}
 
 			return
 		default:
@@ -259,7 +259,7 @@ func (session *TlsSession) Read(appCtx context.Context, index int) ([]byte, erro
 
 // Write sends data through a connection.
 func (session *TlsSession) Write(index int, data []byte) error {
-	log.Printf("TlsSession[%d] Snding %d bytes",index, len(data))
+	log.Printf("TlsSession[%d] Snding %d bytes", index, len(data))
 	//session := s
 	session.writeCh <- data
 	return nil
@@ -337,7 +337,7 @@ func (ctx *TlsContext) Read(appCtx context.Context, index int) ([]byte, error) {
 func (ctx *TlsContext) Close() {
 	log.Printf("TlsContext Close running...")
 	for _, session := range ctx.sessions {
-		log.Printf("sending signal to chnl %d",session.chnl)
+		log.Printf("sending signal to chnl %d", session.chnl)
 		session.closeCh <- true
 	}
 }
