@@ -172,8 +172,10 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					log.Printf("TlsSession[%d] Reconnection failed: %s", s.chnl, err)
 					time.Sleep(5 * time.Second)
 					continue
-				}
-				//time.Sleep(100 * time.Millisecond)
+				}				
+				log.Printf("TlsSession[%d] Pausing to ensure LB is connected to vendor", s.chnl)
+				time.Sleep(6 * time.Second)
+				s.setConnected(true)
 			}
 		}
 	}()
@@ -196,7 +198,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 
 		select {
 		case data := <-s.writeCh:
-			if s.conn != nil {
+			if s.IsConnected() && s.conn != nil {
 				bytes, err := s.conn.Write(data)
 				if err != nil {
 					log.Printf("TlsSession[%d] Write failed: %s", s.chnl, err)
@@ -233,7 +235,7 @@ func (s *TlsSession) reconnect() error {
 	s.mu.Lock()
 	s.conn = conn
 	s.mu.Unlock()
-	s.setConnected(true)
+	//s.setConnected(true)
 	return nil
 }
 
