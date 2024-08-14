@@ -181,21 +181,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 	}()
 
 	for {
-		// if !s.IsConnected() {
-		// 	// Check if the site is active
-		// 	siteIndex := s.chnl % len(ctx.sites)
-		// 	if !ctx.sites[siteIndex].Active {
-		// 		time.Sleep(1 * time.Second) // Wait before retrying
-		// 		continue
-		// 	}
-
-		// 	if err := s.reconnect(); err != nil {
-		// 		log.Printf("TlsSession[%d] Reconnection failed: %s", s.chnl, err)
-		// 		time.Sleep(5 * time.Second)
-		// 		continue
-		// 	}
-		// }
-
+		
 		select {
 		case data := <-s.writeCh:
 			if s.IsConnected() && s.conn != nil {
@@ -212,6 +198,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 			}
 
 		case <-s.closeCh:
+			log.Printf("TlsSession[%d] before closing connection", s.chnl)
 			if s.conn != nil {
 				log.Printf("TlsSession[%d] closing connection", s.chnl)
 				s.conn.Close()
@@ -350,6 +337,7 @@ func (ctx *TlsContext) Read(appCtx context.Context, index int) ([]byte, error) {
 func (ctx *TlsContext) Close() {
 	log.Printf("TlsContext Close running...")
 	for _, session := range ctx.sessions {
+		log.Printf("sending signal to chnl %d",session.chnl)
 		session.closeCh <- true
 	}
 }
