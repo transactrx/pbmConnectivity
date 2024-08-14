@@ -143,7 +143,8 @@ func (ctx *TlsContext) StartMonitoring(threshold int, interval time.Duration) {
 func (s *TlsSession) handleConnection(ctx *TlsContext) {
 	readBuffer := make([]byte, PBM_DATA_BUFFER)
 
-	// Goroutine to handle reading from the connection
+	// MRG 8/13/24 handle connection then the 'read' data to ensure both are in synched
+
 	go func() {
 		for {
 			if s.IsConnected() {
@@ -160,27 +161,38 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				log.Printf("TlsSession[%d] Rcvd %d bytes", s.chnl, bytes)
 				s.readCh <- readBuffer[:bytes]
 			} else {
-				// If not connected, just yield the CPU to avoid busy waiting
-				time.Sleep(100 * time.Millisecond)
+				// Check if the site is active
+				siteIndex := s.chnl % len(ctx.sites)
+				if !ctx.sites[siteIndex].Active {
+					time.Sleep(1 * time.Second) // Wait before retrying
+					continue
+				}
+
+				if err := s.reconnect(); err != nil {
+					log.Printf("TlsSession[%d] Reconnection failed: %s", s.chnl, err)
+					time.Sleep(5 * time.Second)
+					continue
+				}
+				//time.Sleep(100 * time.Millisecond)
 			}
 		}
 	}()
 
 	for {
-		if !s.IsConnected() {
-			// Check if the site is active
-			siteIndex := s.chnl % len(ctx.sites)
-			if !ctx.sites[siteIndex].Active {
-				time.Sleep(1 * time.Second) // Wait before retrying
-				continue
-			}
+		// if !s.IsConnected() {
+		// 	// Check if the site is active
+		// 	siteIndex := s.chnl % len(ctx.sites)
+		// 	if !ctx.sites[siteIndex].Active {
+		// 		time.Sleep(1 * time.Second) // Wait before retrying
+		// 		continue
+		// 	}
 
-			if err := s.reconnect(); err != nil {
-				log.Printf("TlsSession[%d] Reconnection failed: %s", s.chnl, err)
-				time.Sleep(5 * time.Second)
-				continue
-			}
-		}
+		// 	if err := s.reconnect(); err != nil {
+		// 		log.Printf("TlsSession[%d] Reconnection failed: %s", s.chnl, err)
+		// 		time.Sleep(5 * time.Second)
+		// 		continue
+		// 	}
+		// }
 
 		select {
 		case data := <-s.writeCh:
@@ -193,8 +205,8 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				} else {
 					log.Printf("TlsSession[%d] Snd %d bytes", s.chnl, bytes)
 				}
-			}else{
-					log.Printf("TlsSession[%d] Write failed connection object is nil", s.chnl)				
+			} else {
+				log.Printf("TlsSession[%d] Write failed connection object is nil", s.chnl)
 			}
 
 		case <-s.closeCh:
