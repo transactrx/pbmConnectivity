@@ -271,7 +271,7 @@ func (session *TlsSession) Read(appCtx context.Context, index int) ([]byte, erro
 
 // Write sends data through a connection.
 func (session *TlsSession) Write(index int, data []byte) error {
-	log.Printf("Writing %d bytes on chnl: %d", len(data), index)
+	log.Printf("TlsSession[%d] Snding %d bytes",index, len(data))
 	//session := s
 	session.writeCh <- data
 	return nil
