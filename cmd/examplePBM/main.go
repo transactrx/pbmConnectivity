@@ -52,12 +52,12 @@ func main() {
 	}()
 
 
-	for{
+	
 		log.Printf("Main...")
-		time.Sleep(time.Second * 5)
+		time.Sleep(time.Second * 10)
 		tlsCon.Close()
 		
-	}
+	select{}
 	
 	func(){
 		response,_,err := tlsCon.Post([]byte("<HEADER><DATA>"),header)
