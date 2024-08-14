@@ -23,13 +23,13 @@ func main() {
 
 	// prime testing over tls 10.0.205.1:26301
 
-	config["pbmUrl"] = "10.0.205.1,10.0.2.32"
+	config["pbmUrl"] = "10.0.205.1"
 	config["pbmPort"] = "26301"
 	config["pbmReceiveTimeOut"] = "25"
 	config["pbmQueueTimeOut"] = "20"
 	config["pbmInsecureSkipVerify"] = true
 	config["pbmOutboundChnls"] = "1"
-	config["pbmActiveSites"] = "true,false"
+	config["pbmActiveSites"] = "true"
 	
 	tlsCon.Start(config)
 	header := map[string][]string{
@@ -55,6 +55,8 @@ func main() {
 	for{
 		log.Printf("Main...")
 		time.Sleep(time.Second * 5)
+		tlsCon.Close()
+		
 	}
 	
 	func(){

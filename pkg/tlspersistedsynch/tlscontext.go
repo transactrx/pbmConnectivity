@@ -213,6 +213,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 
 		case <-s.closeCh:
 			if s.conn != nil {
+				log.Printf("TlsSession[%d] closing connection", s.chnl)
 				s.conn.Close()
 			}
 
@@ -347,6 +348,7 @@ func (ctx *TlsContext) Read(appCtx context.Context, index int) ([]byte, error) {
 
 // Close closes all TLS sessions.
 func (ctx *TlsContext) Close() {
+	log.Printf("TlsContext Close running...")
 	for _, session := range ctx.sessions {
 		session.closeCh <- true
 	}
