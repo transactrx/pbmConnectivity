@@ -151,16 +151,18 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				log.Printf("TlsSession[%d] reading...", s.chnl)
 				bytes, err := s.conn.Read(readBuffer)
 				if err != nil {
-					s.setConnected(false)
-					s.mu.Lock()
-					s.conn = nil
-					s.mu.Unlock()
-					log.Printf("TlsSession[%d] Read failed: %s", s.chnl, err)
+					ctx.DisconnectSession(s.chnl)
+					// s.setConnected(false)
+					// s.mu.Lock()
+					// s.conn = nil
+					// s.mu.Unlock()
+					log.Printf("TlsSession[%d] Read failed: %s closing session", s.chnl, err)
 					time.Sleep(1 * time.Second)
 					continue
 				}
 				log.Printf("TlsSession[%d] Rcvd %d bytes", s.chnl, bytes)
 				s.readCh <- readBuffer[:bytes]
+				ctx.DisconnectSession(s.chnl)
 			} else {
 				// Check if the site is active
 				siteIndex := s.chnl % len(ctx.sites)
