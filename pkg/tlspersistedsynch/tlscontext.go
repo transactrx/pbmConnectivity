@@ -156,6 +156,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					s.conn = nil
 					s.mu.Unlock()
 					log.Printf("TlsSession[%d] Read failed: %s", s.chnl, err)
+					time.Sleep(1 * time.Second)
 					continue
 				}
 				log.Printf("TlsSession[%d] Rcvd %d bytes", s.chnl, bytes)
@@ -198,11 +199,13 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 			}
 
 		case <-s.closeCh:
-			log.Printf("TlsSession[%d] before closing connection", s.chnl)
-			//if s.conn != nil {
-			log.Printf("TlsSession[%d] closing connection", s.chnl)
-			s.conn.Close()
-			//}
+			
+			if s.conn != nil {
+				log.Printf("TlsSession[%d] closing connection...", s.chnl)
+				s.conn.Close()
+			}else{
+				log.Printf("TlsSession[%d] s.conn.close - conn was null", s.chnl)
+			}
 
 			return
 		default:
