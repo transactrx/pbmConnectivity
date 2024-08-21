@@ -55,7 +55,7 @@ func main() {
 	
 		log.Printf("Main...")
 		time.Sleep(time.Second * 10)
-		tlsCon.Close()
+		//tlsCon.Close()
 		
 	select{}
 	
