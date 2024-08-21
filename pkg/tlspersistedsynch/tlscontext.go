@@ -82,8 +82,8 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 		go session.handleConnection(ctx) // Pass ctx to handleConnection
 	}
 
-	// Start monitoring with a threshold of 5 errors and a check interval of 10 seconds
-	ctx.StartMonitoring(5, 10*time.Second)
+	// Start monitoring with a threshold of 2 errors and a check interval of 10 seconds
+	ctx.StartMonitoring(2, 10*time.Second)
 
 	return ctx, nil
 }
@@ -151,16 +151,18 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				log.Printf("TlsSession[%d] reading...", s.chnl)
 				bytes, err := s.conn.Read(readBuffer)
 				if err != nil {
-					s.setConnected(false)
-					s.mu.Lock()
-					s.conn = nil
-					s.mu.Unlock()
-					log.Printf("TlsSession[%d] Read failed: %s", s.chnl, err)
+					// MRG 8.21.24 let the monitor routine disconnect after error count 
+					//ctx.DisconnectSession(s.chnl)
+					// s.setConnected(false)
+					// s.mu.Lock()
+					// s.conn = nil
+					// s.mu.Unlock()
+					log.Printf("TlsSession[%d] Read failed: %s closing session", s.chnl, err)
 					time.Sleep(1 * time.Second)
 					continue
 				}
 				log.Printf("TlsSession[%d] Rcvd %d bytes", s.chnl, bytes)
-				s.readCh <- readBuffer[:bytes]
+				s.readCh <- readBuffer[:bytes]				
 			} else {
 				// Check if the site is active
 				siteIndex := s.chnl % len(ctx.sites)
