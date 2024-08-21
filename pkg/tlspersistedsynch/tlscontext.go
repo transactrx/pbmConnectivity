@@ -116,7 +116,7 @@ func (ctx *TlsContext) DisconnectSession(index int) {
 		ctx.sessions[index].connected = false
 		ctx.sessions[index].conn.Close()
 		ctx.sessions[index].errors = 0     // Reset error count
-		close(ctx.sessions[index].closeCh) // Signal close
+//		close(ctx.sessions[index].closeCh) // Signal close
 	}
 }
 
@@ -152,12 +152,12 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				bytes, err := s.conn.Read(readBuffer)
 				if err != nil {
 					// MRG 8.21.24 let the monitor routine disconnect after error count 
-					//ctx.DisconnectSession(s.chnl)
+					ctx.DisconnectSession(s.chnl)
 					// s.setConnected(false)
 					// s.mu.Lock()
 					// s.conn = nil
 					// s.mu.Unlock()
-					log.Printf("TlsSession[%d] Read failed: %s closing session", s.chnl, err)
+					log.Printf("TlsSession[%d] Read failed: %s", s.chnl, err)
 					time.Sleep(1 * time.Second)
 					continue
 				}
