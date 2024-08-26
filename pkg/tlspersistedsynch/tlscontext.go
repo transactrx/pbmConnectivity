@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"net"
 	"strconv"
 	"sync"
 	"time"
@@ -18,7 +19,7 @@ type Site struct {
 // TlsSession represents a single TLS session.
 type TlsSession struct {
 	address   string
-	conn      *tls.Conn
+	tlsConn   *tls.Conn
 	readCh    chan []byte
 	writeCh   chan []byte
 	closeCh   chan bool
@@ -32,11 +33,12 @@ type TlsSession struct {
 
 // TlsContext manages multiple TLS sessions.
 type TlsContext struct {
-	sessions []*TlsSession
-	bitmap   []bool
-	mu       sync.Mutex
-	lastUsed int
-	sites    []*Site
+	sessions  []*TlsSession
+	bitmap    []bool
+	mu        sync.Mutex
+	lastUsed  int
+	sites     []*Site
+	tcpDialer *net.Dialer
 }
 
 // NewTlsContext creates a new TlsContext with predefined sessions.
@@ -48,6 +50,11 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 		sessions: make([]*TlsSession, appCfg.PbmOutboundChnls),
 		bitmap:   make([]bool, appCfg.PbmOutboundChnls),
 		sites:    make([]*Site, len(appCfg.PbmUrl)), // Create sites based on the number of URLs
+		// Define a global Dialer with desired keep-alive settings
+		tcpDialer: &net.Dialer{
+			Timeout:   5 * time.Second,
+			KeepAlive: 5 * time.Minute, // Set the keep-alive interval to 15 seconds
+		},
 	}
 
 	activeSite := false
@@ -60,7 +67,6 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: appCfg.PbmInsecureSkipVerify, // You might want to set this to false in production
-
 	}
 
 	// Assign sessions to sites
@@ -114,9 +120,9 @@ func (ctx *TlsContext) DisconnectSession(index int) {
 
 	if ctx.sessions[index].connected {
 		ctx.sessions[index].connected = false
-		ctx.sessions[index].conn.Close()
-		ctx.sessions[index].errors = 0     // Reset error count
-//		close(ctx.sessions[index].closeCh) // Signal close
+		ctx.sessions[index].tlsConn.Close()
+		ctx.sessions[index].errors = 0 // Reset error count
+		//		close(ctx.sessions[index].closeCh) // Signal close
 	}
 }
 
@@ -149,9 +155,9 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 		for {
 			if s.IsConnected() {
 				log.Printf("TlsSession[%d] reading...", s.chnl)
-				bytes, err := s.conn.Read(readBuffer)
+				bytes, err := s.tlsConn.Read(readBuffer)
 				if err != nil {
-					// MRG 8.21.24 let the monitor routine disconnect after error count 
+					// MRG 8.21.24 let the monitor routine disconnect after error count
 					ctx.DisconnectSession(s.chnl)
 					// s.setConnected(false)
 					// s.mu.Lock()
@@ -162,7 +168,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					continue
 				}
 				log.Printf("TlsSession[%d] Rcvd %d bytes", s.chnl, bytes)
-				s.readCh <- readBuffer[:bytes]				
+				s.readCh <- readBuffer[:bytes]
 			} else {
 				// Check if the site is active
 				siteIndex := s.chnl % len(ctx.sites)
@@ -171,7 +177,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					continue
 				}
 
-				if err := s.reconnect(); err != nil {
+				if err := s.reconnect(true); err != nil {
 					log.Printf("TlsSession[%d] Reconnection failed: %s", s.chnl, err)
 					time.Sleep(5 * time.Second)
 					continue
@@ -187,8 +193,8 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 
 		select {
 		case data := <-s.writeCh:
-			if s.IsConnected() && s.conn != nil {
-				bytes, err := s.conn.Write(data)
+			if s.IsConnected() && s.tlsConn != nil {
+				bytes, err := s.tlsConn.Write(data)
 				if err != nil {
 					log.Printf("TlsSession[%d] Write failed: %s", s.chnl, err)
 					s.setConnected(false)
@@ -201,11 +207,11 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 			}
 
 		case <-s.closeCh:
-			
-			if s.conn != nil {
+
+			if s.tlsConn != nil {
 				log.Printf("TlsSession[%d] closing connection...", s.chnl)
-				s.conn.Close()
-			}else{
+				s.tlsConn.Close()
+			} else {
 				log.Printf("TlsSession[%d] s.conn.close - conn was null", s.chnl)
 			}
 
@@ -218,17 +224,35 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 }
 
 // reconnect attempts to reconnect the TLS session.
-func (s *TlsSession) reconnect() error {
-	log.Printf("TlsSession[%d] connect connecting to '%s' Pbm Certificate Insecure Skip Verify: %t", s.chnl, s.address, s.appConfig.PbmInsecureSkipVerify)
-	conn, err := tls.Dial("tcp", s.address, s.tlsConfig)
-	if err != nil {
-		return err
+func (s *TlsSession) reconnect(explicitHandshake bool) error {
+	log.Printf("TlsSession[%d] connect connecting to '%s' Pbm Certificate Insecure Skip Verify: %t splitHandshake: %t", s.chnl, s.address, s.appConfig.PbmInsecureSkipVerify,explicitHandshake)
+	if explicitHandshake { // split call using tcp then tls - in order to configure keep-alive
+		// Use the global dialer to establish a TCP connection
+		tcpConn, err := Ctx.tcpDialer.Dial("tcp", s.address)
+		if err != nil {
+			return err
+		}
+		// Wrap the TCP connection in a TLS connection
+		conn := tls.Client(tcpConn, s.tlsConfig)
+		// Perform the TLS handshake
+		err = conn.Handshake()
+		if err != nil {
+			return err
+		}
+		s.mu.Lock()
+		s.tlsConn = conn
+		s.mu.Unlock()
+
+	} else {
+		conn, err := tls.Dial("tcp", s.address, s.tlsConfig)
+		if err != nil {
+			return err
+		}
+		s.mu.Lock()
+		s.tlsConn = conn
+		s.mu.Unlock()
 	}
 	log.Printf("TlsSession[%d] connect connected to '%s'", s.chnl, s.address)
-	s.mu.Lock()
-	s.conn = conn
-	s.mu.Unlock()
-	//s.setConnected(true)
 	return nil
 }
 
