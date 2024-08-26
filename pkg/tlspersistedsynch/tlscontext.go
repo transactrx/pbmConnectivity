@@ -237,6 +237,7 @@ func (s *TlsSession) reconnect(explicitHandshake bool) error {
 		// Perform the TLS handshake
 		err = conn.Handshake()
 		if err != nil {
+			tcpConn.Close()
 			return err
 		}
 		s.mu.Lock()
