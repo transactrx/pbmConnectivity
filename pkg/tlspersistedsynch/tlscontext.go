@@ -49,12 +49,8 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 	ctx := &TlsContext{
 		sessions: make([]*TlsSession, appCfg.PbmOutboundChnls),
 		bitmap:   make([]bool, appCfg.PbmOutboundChnls),
-		sites:    make([]*Site, len(appCfg.PbmUrl)), // Create sites based on the number of URLs
-		// Define a global Dialer with desired keep-alive settings
-		tcpDialer: &net.Dialer{
-			Timeout:   5 * time.Second,
-			KeepAlive: 5 * time.Minute, // Set the keep-alive interval to 15 seconds
-		},
+		sites:    make([]*Site, len(appCfg.PbmUrl)), // Create sites based on the number of URLs		
+		
 	}
 
 	activeSite := false
@@ -227,11 +223,14 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 func (s *TlsSession) reconnect(explicitHandshake bool) error {
 	log.Printf("TlsSession[%d] connect connecting to '%s' Pbm Certificate Insecure Skip Verify: %t splitHandshake: %t", s.chnl, s.address, s.appConfig.PbmInsecureSkipVerify, explicitHandshake)
 	if explicitHandshake { // split call using tcp then tls - in order to configure keep-alive
-		// Use the global dialer to establish a TCP connection
-		timeout := 5 * time.Second // Adjust the timeout duration as needed
-		// Establish a TCP connection to the address
-		tcpConn, err := net.DialTimeout("tcp",s.address, timeout)
-		//tcpConn, err := Ctx.tcpDialer.Dial("tcp", s.address)
+		// create dialer with keep-alive and connect time-out
+		timeout := 5 * time.Second
+		keepAliveInterval := 5 * time.Minute
+		dialer := &net.Dialer{
+			Timeout:   timeout,
+			KeepAlive: keepAliveInterval,
+		}
+		tcpConn, err := dialer.Dial("tcp", s.address)
 		if err != nil {
 			return err
 		}
@@ -241,9 +240,11 @@ func (s *TlsSession) reconnect(explicitHandshake bool) error {
 		conn.SetReadDeadline(time.Now().Add(timeout))
 		err = conn.Handshake()		
 		if err != nil {
+			log.Printf("TlsSession[%d] connect connecting to '%s' handshake failed err: %v", s.chnl, s.address,err)
 			tcpConn.Close()
 			return err
 		}
+		log.Printf("TlsSession[%d] connect connecting to '%s' handshake success", s.chnl, s.address)
 		// After a successful handshake, set the read deadline to "never"
 		conn.SetReadDeadline(time.Time{})
 		s.mu.Lock()
@@ -376,4 +377,19 @@ func (ctx *TlsContext) Close() {
 		log.Printf("sending signal to chnl %d", session.chnl)
 		session.closeCh <- true
 	}
+}
+func (ctx *TlsContext) GetConnectionCount() int {
+	ctx.mu.Lock()         // Lock the mutex to ensure thread safety
+	defer ctx.mu.Unlock() // Unlock the mutex after the function is done
+
+	count := 0
+	for _, session := range ctx.sessions {
+		//session.mu.Lock() // Lock the session mutex to ensure thread safety for the connected status
+		if session.connected {
+			count++
+		}
+		//session.mu.Unlock() // Unlock the session mutex after checking the status
+	}
+
+	return count
 }
