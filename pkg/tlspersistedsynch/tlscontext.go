@@ -225,21 +225,27 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 
 // reconnect attempts to reconnect the TLS session.
 func (s *TlsSession) reconnect(explicitHandshake bool) error {
-	log.Printf("TlsSession[%d] connect connecting to '%s' Pbm Certificate Insecure Skip Verify: %t splitHandshake: %t", s.chnl, s.address, s.appConfig.PbmInsecureSkipVerify,explicitHandshake)
+	log.Printf("TlsSession[%d] connect connecting to '%s' Pbm Certificate Insecure Skip Verify: %t splitHandshake: %t", s.chnl, s.address, s.appConfig.PbmInsecureSkipVerify, explicitHandshake)
 	if explicitHandshake { // split call using tcp then tls - in order to configure keep-alive
 		// Use the global dialer to establish a TCP connection
-		tcpConn, err := Ctx.tcpDialer.Dial("tcp", s.address)
+		timeout := 5 * time.Second // Adjust the timeout duration as needed
+		// Establish a TCP connection to the address
+		tcpConn, err := net.DialTimeout("tcp",s.address, timeout)
+		//tcpConn, err := Ctx.tcpDialer.Dial("tcp", s.address)
 		if err != nil {
 			return err
 		}
 		// Wrap the TCP connection in a TLS connection
 		conn := tls.Client(tcpConn, s.tlsConfig)
-		// Perform the TLS handshake
-		err = conn.Handshake()
+		// Perform the TLS handshake using a time out 
+		conn.SetReadDeadline(time.Now().Add(timeout))
+		err = conn.Handshake()		
 		if err != nil {
 			tcpConn.Close()
 			return err
 		}
+		// After a successful handshake, set the read deadline to "never"
+		conn.SetReadDeadline(time.Time{})
 		s.mu.Lock()
 		s.tlsConn = conn
 		s.mu.Unlock()
