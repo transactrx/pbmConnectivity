@@ -10,3 +10,7 @@ type PBMConnect interface {
 	Close() error
 }
 
+type PBMConnectWithStats interface {
+    PBMConnect
+    GetStats(map[string]interface{}) error
+}
