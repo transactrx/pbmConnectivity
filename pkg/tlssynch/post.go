@@ -31,7 +31,7 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 			return responseBuffer, nil, err
 		}
 	}
-	log.Printf("tlssynch.post tid: %s response: '%s'", tid, responseBuffer)
+	log.Printf("tlssynch.post tid: %s responsedata(16): %.16s", tid, responseBuffer)
 	return responseBuffer, nil, pbmlib.ErrorCode.TRX00
 }
 
