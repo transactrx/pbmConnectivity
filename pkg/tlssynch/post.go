@@ -45,7 +45,7 @@ func Connect(tid string,urlOverride string) (net.Conn, pbmlib.ErrorInfo) {
 	if len(urlOverride)>0 {
 		url = urlOverride
 	}
-	address := Cfg.PbmUrl + ":" + Cfg.PbmPort
+	address := url + ":" + Cfg.PbmPort
 	log.Printf("tlssynch.connect tid: %s connecting to '%s' Pbm Certificate Insecure Skip Verify: %t", tid, address, Cfg.PbmInsecureSkipVerify)
 	// Create a TLS configuration
 	tlsConfig := &tls.Config{
