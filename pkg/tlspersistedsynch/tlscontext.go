@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
-	"net"
+	"net"	
 	"strconv"
 	"sync"
 	"time"
@@ -49,8 +49,8 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 	ctx := &TlsContext{
 		sessions: make([]*TlsSession, appCfg.PbmOutboundChnls),
 		bitmap:   make([]bool, appCfg.PbmOutboundChnls),
-		sites:    make([]*Site, len(appCfg.PbmUrl)), // Create sites based on the number of URLs		
-		
+		sites:    make([]*Site, len(appCfg.PbmUrl)), // Create sites based on the number of URLs
+
 	}
 
 	activeSite := false
@@ -144,15 +144,16 @@ func (ctx *TlsContext) StartMonitoring(threshold int, interval time.Duration) {
 // handleConnection handles reading and writing for a TLS session.
 func (s *TlsSession) handleConnection(ctx *TlsContext) {
 	readBuffer := make([]byte, PBM_DATA_BUFFER)
-
+	zeroSlice := make([]byte, len(readBuffer)) // Create a zeroed slice of the same length
 	// MRG 8/13/24 handle connection then the 'read' data to ensure both are in synched
 
 	go func() {
 		for {
 			if s.IsConnected() {
 				log.Printf("TlsSession[%d] reading...", s.chnl)
+				copy(readBuffer, zeroSlice) // Copy the zeroed slice into the buffer
 				bytes, err := s.tlsConn.Read(readBuffer)
-				if err != nil {
+				if err != nil || bytes <= 0  {
 					// MRG 8.21.24 let the monitor routine disconnect after error count
 					ctx.DisconnectSession(s.chnl)
 					// s.setConnected(false)
@@ -164,7 +165,11 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					continue
 				}
 				log.Printf("TlsSession[%d] Rcvd %d bytes", s.chnl, bytes)
-				s.readCh <- readBuffer[:bytes]
+				// Create a new slice with the received data
+				dataToSend := make([]byte, bytes)
+				copy(dataToSend, readBuffer[:bytes])
+				s.readCh <- dataToSend // Send the new slice
+				//s.readCh <- readBuffer[:bytes]
 			} else {
 				// Check if the site is active
 				siteIndex := s.chnl % len(ctx.sites)
@@ -236,11 +241,11 @@ func (s *TlsSession) reconnect(explicitHandshake bool) error {
 		}
 		// Wrap the TCP connection in a TLS connection
 		conn := tls.Client(tcpConn, s.tlsConfig)
-		// Perform the TLS handshake using a time out 
+		// Perform the TLS handshake using a time out
 		conn.SetReadDeadline(time.Now().Add(timeout))
-		err = conn.Handshake()		
+		err = conn.Handshake()
 		if err != nil {
-			log.Printf("TlsSession[%d] connect connecting to '%s' handshake failed err: %v", s.chnl, s.address,err)
+			log.Printf("TlsSession[%d] connect connecting to '%s' handshake failed err: %v", s.chnl, s.address, err)
 			tcpConn.Close()
 			return err
 		}
