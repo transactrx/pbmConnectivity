@@ -124,6 +124,8 @@ func (ctx *TlsContext) DisconnectSession(index int) {
 	}
 }
 
+
+
 func (ctx *TlsContext) StartMonitoring(threshold int, interval time.Duration) {
 	go func() {
 		for {
@@ -146,8 +148,12 @@ func (ctx *TlsContext) StartMonitoring(threshold int, interval time.Duration) {
 // handleConnection handles reading and writing for a TLS session.
 func (s *TlsSession) handleConnection(ctx *TlsContext) {
 	readBuffer := make([]byte, PBM_DATA_BUFFER)
+	tmpBuffer := make([]byte, PBM_DATA_BUFFER)
 	zeroSlice := make([]byte, len(readBuffer)) // Create a zeroed slice of the same length
 	// MRG 8/13/24 handle connection then the 'read' data to ensure both are in synched
+	tranFoundState := NoData
+	 outputLen := 0                        // Current number of valid bytes in output
+
 
 	go func() {
 		for {
@@ -158,28 +164,26 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				if err != nil || bytes <= 0  {
 					// MRG 8.21.24 let the monitor routine disconnect after error count
 					ctx.DisconnectSession(s.chnl)
-					// s.setConnected(false)
-					// s.mu.Lock()
-					// s.conn = nil
-					// s.mu.Unlock()
 					log.Printf("TlsSession[%d] Read failed: %s", s.chnl, err)
 					time.Sleep(1 * time.Second)
 					continue
 				}
-
-				// TODO - use either header len or end of record delimiter to ensure 
-				// read function has seen entire response from pbm 
-				// if required, read again til full response is received OR 
-				// time-out is reached 
-
-
-
 				log.Printf("TlsSession[%d] Rcvd %d bytes", s.chnl, bytes)
-				// Create a new slice with the received data
-				dataToSend := make([]byte, bytes)
-				copy(dataToSend, readBuffer[:bytes])
-				s.readCh <- dataToSend // Send the new slice
-				//s.readCh <- readBuffer[:bytes]
+				retVal,state,err := FindFullTransaction(readBuffer,bytes,&tmpBuffer,&outputLen,tranFoundState)				
+				tranFoundState = state 
+				if(err != nil){
+					log.Printf("TlsSession[%d] Rcvd failed err: %s", s.chnl,err)
+				}
+				if(retVal == true && state == TransactionFound){
+					// Create a new slice with the received data
+					dataToSend := make([]byte, bytes)
+					copy(dataToSend, readBuffer[:bytes])
+					s.readCh <- dataToSend // Send the new slice
+					tranFoundState = NoData
+					outputLen = 0 
+				}else{
+					log.Printf("TlsSession[%d] Rcvd MoreDataPending outputLen: %d", s.chnl,outputLen)
+				}
 			} else {
 				// Check if the site is active
 				siteIndex := s.chnl % len(ctx.sites)
@@ -234,41 +238,46 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 	}
 }
 
+// Define state constants
 const (
-    NoData = iota
-    MoreDataPending
-    TransactionFound
+    NoData          = 0 // Indicates that there is no data yet
+    MoreDataPending = 1 // More data is needed
+    TransactionFound = 2 // A full transaction has been found
 )
-
-func FindFullTransaction(input []byte, output *[]byte, state int) (bool, int, error) {
-    // Ensure we have enough data to check for a full transaction
-    if len(input) < 4 {
-        return false, MoreDataPending, nil // Not enough data to even read the header
+// FindFullTransaction processes input bytes and updates the output with complete transactions.
+func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *int, state int) (bool, int, error) {
+    // Ensure the input length is valid
+    if inputLen < 0 || inputLen > len(input) {
+        return false, MoreDataPending, errors.New("invalid input length")
     }
 
-    // Parse the expected message length from the first 4 bytes (assuming big-endian)
-    expectedLength := int(input[0])<<24 | int(input[1])<<16 | int(input[2])<<8 | int(input[3])
-
-    // If there's less data than expected, more data is needed
-    if len(input) < expectedLength {
-        return false, MoreDataPending, nil
+    // Calculate how many bytes we can safely append
+    availableSpace := PBM_DATA_BUFFER - *outputLen
+    if availableSpace <= 0 {
+        return false, MoreDataPending, errors.New("output buffer overflow")
     }
 
-    // Optional: Check for ETX delimiter (0x03) within the transaction
-    if idx := bytes.IndexByte(input[:expectedLength], 0x03); idx != -1 {
-        // Found ETX, treat it as the end of the transaction
-        *output = append(*output, input[:expectedLength]...) // Copy the valid transaction to output
+    // Determine how much input we can append
+    bytesToAppend := inputLen
+    if bytesToAppend > availableSpace {
+        bytesToAppend = availableSpace
+    }
+
+    // Check for ETX (0x03) in the input data
+    if idx := bytes.IndexByte(input[:bytesToAppend], Cfg.EndOfRecordChar); idx != -1 {
+        // Found ETX, append up to and including the ETX
+        copy((*output)[*outputLen:], input[:idx+1]) // Copy the valid portion to output
+        *outputLen += idx + 1                       // Update the output length
         return true, TransactionFound, nil
     }
 
-    // No delimiter, but we received enough bytes for a full transaction
-    *output = append(*output, input[:expectedLength]...) // Copy the full transaction to output
+    // No ETX found, append the input data to output
+    copy((*output)[*outputLen:], input[:bytesToAppend]) // Copy to output
+    *outputLen += bytesToAppend                        // Update the output length
 
-    return true, TransactionFound, nil
+    return false, MoreDataPending, nil
 }
 
-
-// reconnect attempts to reconnect the TLS session.
 func (s *TlsSession) reconnect(explicitHandshake bool) error {
 	log.Printf("TlsSession[%d] connect connecting to '%s' Pbm Certificate Insecure Skip Verify: %t splitHandshake: %t", s.chnl, s.address, s.appConfig.PbmInsecureSkipVerify, explicitHandshake)
 	if explicitHandshake { // split call using tcp then tls - in order to configure keep-alive
@@ -327,12 +336,12 @@ func (s *TlsSession) IsConnected() bool {
 	return s.connected
 }
 
-func (session *TlsSession) Read(appCtx context.Context, index int,headerCheckOffset int,headerCheckLen int,requestHeader string) ([]byte, error) {
+func (session *TlsSession) Read(appCtx context.Context, index int,requestHeader string) ([]byte, error) {
 
 	select {
 	case data := <-session.readCh:
 		log.Printf("TlsSession[%d] %d bytes received", index, len(data))
-		validResponse := IsValidResponse(data,requestHeader,headerCheckOffset,headerCheckLen)
+		validResponse := IsValidResponse(data,requestHeader)
 		if(!validResponse){			
 			return nil,errors.New("Mismatch request/response")
 		}	
@@ -346,24 +355,24 @@ func (session *TlsSession) Read(appCtx context.Context, index int,headerCheckOff
 // MRG 9/23/24 compare response header vs request header 
 // true - valid response
 // false -- issue with incoming header (potential swapped responses)
-func IsValidResponse(response []byte, requestHeader string,headerCheckOffset int,headerCheckLen int) bool {
+func IsValidResponse(response []byte, requestHeader string) bool {
 
-	log.Printf("PBM response data(ALL) '%s'", string(response))	
+	//log.Printf("PBM response data(ALL) '%s'", string(response))	
 	result := false
 	
-	if len(response) > headerCheckOffset+headerCheckLen {
-		if len(requestHeader) > headerCheckLen {
-			requestHeader = requestHeader[:headerCheckLen] // truncate to 23 characters if longer
+	if len(response) > Cfg.HeaderCheckOffset+Cfg.HeaderCheckLen{
+		if len(requestHeader) > Cfg.HeaderCheckLen {
+			requestHeader = requestHeader[:Cfg.HeaderCheckLen] // truncate to 23 characters if longer
 		}
-		responseHeader := make([]byte, headerCheckLen)
-		copy(responseHeader, response[headerCheckOffset:headerCheckOffset+headerCheckLen])
+		responseHeader := make([]byte, Cfg.HeaderCheckLen)
+		copy(responseHeader, response[Cfg.HeaderCheckOffset:Cfg.HeaderCheckOffset+Cfg.HeaderCheckLen])
 		// Compare response hdr vs claim header		
 		
-		reqHdrString := fmt.Sprintf("%-*s", headerCheckLen, requestHeader)
+		reqHdrString := fmt.Sprintf("%-*s", Cfg.HeaderCheckLen, requestHeader)
 		if string(responseHeader) == reqHdrString {
 			result = true
 		} else {
-			log.Printf("ValidateResponse failed mismatch responseHdr: '%s' requestHdr: '%s'", responseHeader, reqHdrString)
+			log.Printf("ValidateResponse failed mismatch FULLresp: '%s' requestHdr: '%s'", string(response), requestHeader)
 		}
 	}
 	return result
