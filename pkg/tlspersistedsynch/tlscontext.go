@@ -1,11 +1,13 @@
 package tlspersistedsynch
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log"
-	"net"	
+	"net"
 	"strconv"
 	"sync"
 	"time"
@@ -164,6 +166,14 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					time.Sleep(1 * time.Second)
 					continue
 				}
+
+				// TODO - use either header len or end of record delimiter to ensure 
+				// read function has seen entire response from pbm 
+				// if required, read again til full response is received OR 
+				// time-out is reached 
+
+
+
 				log.Printf("TlsSession[%d] Rcvd %d bytes", s.chnl, bytes)
 				// Create a new slice with the received data
 				dataToSend := make([]byte, bytes)
@@ -224,6 +234,40 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 	}
 }
 
+const (
+    NoData = iota
+    MoreDataPending
+    TransactionFound
+)
+
+func FindFullTransaction(input []byte, output *[]byte, state int) (bool, int, error) {
+    // Ensure we have enough data to check for a full transaction
+    if len(input) < 4 {
+        return false, MoreDataPending, nil // Not enough data to even read the header
+    }
+
+    // Parse the expected message length from the first 4 bytes (assuming big-endian)
+    expectedLength := int(input[0])<<24 | int(input[1])<<16 | int(input[2])<<8 | int(input[3])
+
+    // If there's less data than expected, more data is needed
+    if len(input) < expectedLength {
+        return false, MoreDataPending, nil
+    }
+
+    // Optional: Check for ETX delimiter (0x03) within the transaction
+    if idx := bytes.IndexByte(input[:expectedLength], 0x03); idx != -1 {
+        // Found ETX, treat it as the end of the transaction
+        *output = append(*output, input[:expectedLength]...) // Copy the valid transaction to output
+        return true, TransactionFound, nil
+    }
+
+    // No delimiter, but we received enough bytes for a full transaction
+    *output = append(*output, input[:expectedLength]...) // Copy the full transaction to output
+
+    return true, TransactionFound, nil
+}
+
+
 // reconnect attempts to reconnect the TLS session.
 func (s *TlsSession) reconnect(explicitHandshake bool) error {
 	log.Printf("TlsSession[%d] connect connecting to '%s' Pbm Certificate Insecure Skip Verify: %t splitHandshake: %t", s.chnl, s.address, s.appConfig.PbmInsecureSkipVerify, explicitHandshake)
@@ -283,21 +327,46 @@ func (s *TlsSession) IsConnected() bool {
 	return s.connected
 }
 
-func (session *TlsSession) Read(appCtx context.Context, index int) ([]byte, error) {
-	//session := s
-	//session.mu.Lock()
-	//defer session.mu.Unlock()
+func (session *TlsSession) Read(appCtx context.Context, index int,headerCheckOffset int,headerCheckLen int,requestHeader string) ([]byte, error) {
 
 	select {
 	case data := <-session.readCh:
 		log.Printf("TlsSession[%d] %d bytes received", index, len(data))
-		//ctx.ClearError(index)
+		validResponse := IsValidResponse(data,requestHeader,headerCheckOffset,headerCheckLen)
+		if(!validResponse){			
+			return nil,errors.New("Mismatch request/response")
+		}	
 		return data, nil
 	case <-appCtx.Done():
 		//ctx.IncrementError(index)
 		return nil, appCtx.Err() // Return the context error, typically context.DeadlineExceeded
 	}
 }
+
+// MRG 9/23/24 compare response header vs request header 
+// true - valid response
+// false -- issue with incoming header (potential swapped responses)
+func IsValidResponse(response []byte, requestHeader string,headerCheckOffset int,headerCheckLen int) bool {
+
+	log.Printf("PBM response data(ALL) '%s'", string(response))	
+	result := false
+	
+	if len(response) > headerCheckOffset+headerCheckLen {
+		if len(requestHeader) > headerCheckLen {
+			requestHeader = requestHeader[:headerCheckLen] // truncate to 23 characters if longer
+		}
+		responseHeader := make([]byte, headerCheckLen)
+		copy(responseHeader, response[headerCheckOffset:headerCheckOffset+headerCheckLen])
+		// Compare response hdr vs claim header		
+		if string(responseHeader) == requestHeader {
+			result = true
+		} else {
+			log.Printf("ValidateResponse failed mismatch responseHdr: '%s' requestHdr: '%s'", responseHeader, requestHeader)
+		}
+	}
+	return result
+}
+
 
 // Write sends data through a connection.
 func (session *TlsSession) Write(index int, data []byte) error {
@@ -359,21 +428,6 @@ func (ctx *TlsContext) Write(index int, data []byte) error {
 	return nil
 }
 
-func (ctx *TlsContext) Read(appCtx context.Context, index int) ([]byte, error) {
-	session := ctx.sessions[index]
-	//session.mu.Lock()
-	//defer session.mu.Unlock()
-
-	select {
-	case data := <-session.readCh:
-		log.Printf("read some data... data len: %d", len(data))
-		ctx.ClearError(index)
-		return data, nil
-	case <-appCtx.Done():
-		ctx.IncrementError(index)
-		return nil, appCtx.Err() // Return the context error, typically context.DeadlineExceeded
-	}
-}
 
 // Close closes all TLS sessions.
 func (ctx *TlsContext) Close() {

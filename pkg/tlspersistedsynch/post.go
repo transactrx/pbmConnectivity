@@ -14,10 +14,26 @@ func (pc *TLSPersistedSyncConnect) Post(claim []byte, header map[string][]string
 	//var responseBuffer []byte
 	readTimeOut, _ := strconv.Atoi(Cfg.PbmReceiveTimeOut)
 	tid := "Unknown-TID"
+	requestHeader := "nodata"
+	headerCheckOffset := "nodata"
+	headerCheckLen:= "nodata"
+
 	if values, ok := header["transmissionId"]; ok && len(values) > 0 {
 		tid = values[0]
 	}
-	log.Printf("tlspersynch.post tid: %s finding chnl...", tid)
+	// MRG 10.5.24 - pass headerCheck boolean & headerCheckValue 
+	
+	if values, ok := header["headerValueToCheck"]; ok && len(values) > 0 {
+		requestHeader = values[0]
+	}
+	if values, ok := header["headerCheckOffset"]; ok && len(values) > 0 {
+		headerCheckOffset = values[0]
+	}
+	if values, ok := header["headerCheckLen"]; ok && len(values) > 0 {
+		headerCheckLen = values[0]
+	}
+
+	log.Printf("tlspersynch.post tid: %s hdrCheckOffset: %s hdrCheckLen: %s headerValue: %s FindChnl...", tid,headerCheckOffset,headerCheckLen,requestHeader)
 
 	session , index, err := Ctx.FindConnection()
 	if err != nil {
@@ -35,7 +51,9 @@ func (pc *TLSPersistedSyncConnect) Post(claim []byte, header map[string][]string
 	appCtx, cancel := context.WithTimeout(context.Background(), time.Duration(readTimeOut)*time.Second) // adjust the timeout as needed
 	defer cancel()
 
-	response, err := session.Read(appCtx, index)
+	hdrOffset,_ := strconv.Atoi(headerCheckOffset)
+	hdrLen,_ := strconv.Atoi(headerCheckLen)
+	response, err := session.Read(appCtx, index,hdrOffset,hdrLen,requestHeader)
 	if err != nil {
 		Ctx.IncrementError(index)
 		if err == context.DeadlineExceeded {
