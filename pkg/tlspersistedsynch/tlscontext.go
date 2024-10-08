@@ -358,10 +358,12 @@ func IsValidResponse(response []byte, requestHeader string,headerCheckOffset int
 		responseHeader := make([]byte, headerCheckLen)
 		copy(responseHeader, response[headerCheckOffset:headerCheckOffset+headerCheckLen])
 		// Compare response hdr vs claim header		
-		if string(responseHeader) == requestHeader {
+		
+		reqHdrString := fmt.Sprintf("%-*s", headerCheckLen, requestHeader)
+		if string(responseHeader) == reqHdrString {
 			result = true
 		} else {
-			log.Printf("ValidateResponse failed mismatch responseHdr: '%s' requestHdr: '%s'", responseHeader, requestHeader)
+			log.Printf("ValidateResponse failed mismatch responseHdr: '%s' requestHdr: '%s'", responseHeader, reqHdrString)
 		}
 	}
 	return result
