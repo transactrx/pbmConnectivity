@@ -20,6 +20,12 @@ type Config struct {
 	PbmInsecureSkipVerify bool
 	PbmOutboundChnls      int
 	PbmActiveSites        []bool
+	// Data validation 
+	HeaderCheck 		bool 
+	HeaderCheckOffset   int
+	HeaderCheckLen		int 
+	EndOfRecordChar     byte 
+
 
 }
 
@@ -107,6 +113,14 @@ func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 		log.Printf("Start site(s) status not Provided failed")
 	}
 
+	// TODO MRG 10.8.24 - make sure this is done thru config 
+	// for now hardcoding it
+
+	Cfg.HeaderCheck 		= true
+	Cfg.HeaderCheckOffset   = 17 
+	Cfg.HeaderCheckLen		= 23
+	Cfg.EndOfRecordChar     = 0x03
+ 
 	// run TlsContext
 	Ctx, err = NewTlsContext(Cfg)
 	if err != nil {
