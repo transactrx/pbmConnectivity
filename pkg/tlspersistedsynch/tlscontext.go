@@ -18,11 +18,18 @@ type Site struct {
 	Active bool
 }
 
+type Response struct {
+	data   []byte
+	err    error
+	status Status
+}
+
 // TlsSession represents a single TLS session.
 type TlsSession struct {
 	address   string
 	tlsConn   *tls.Conn
 	readCh    chan []byte
+	readCh1   chan Response
 	writeCh   chan []byte
 	closeCh   chan bool
 	connected bool
@@ -75,6 +82,7 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 		session := &TlsSession{
 			address:   addr,
 			readCh:    make(chan []byte),
+			readCh1:   make(chan Response),
 			writeCh:   make(chan []byte),
 			closeCh:   make(chan bool),
 			connected: false,
@@ -124,8 +132,6 @@ func (ctx *TlsContext) DisconnectSession(index int) {
 	}
 }
 
-
-
 func (ctx *TlsContext) StartMonitoring(threshold int, interval time.Duration) {
 	go func() {
 		for {
@@ -152,8 +158,8 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 	zeroSlice := make([]byte, len(readBuffer)) // Create a zeroed slice of the same length
 	// MRG 8/13/24 handle connection then the 'read' data to ensure both are in synched
 	tranFoundState := NoData
-	 outputLen := 0                        // Current number of valid bytes in output
-
+	outputLen := 0 // Current number of valid bytes in output
+	
 
 	go func() {
 		for {
@@ -161,7 +167,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				log.Printf("TlsSession[%d] reading...", s.chnl)
 				copy(readBuffer, zeroSlice) // Copy the zeroed slice into the buffer
 				bytes, err := s.tlsConn.Read(readBuffer)
-				if err != nil || bytes <= 0  {
+				if err != nil || bytes <= 0 {
 					// MRG 8.21.24 let the monitor routine disconnect after error count
 					ctx.DisconnectSession(s.chnl)
 					log.Printf("TlsSession[%d] Read failed: %s", s.chnl, err)
@@ -169,20 +175,27 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					continue
 				}
 				log.Printf("TlsSession[%d] Rcvd %d bytes", s.chnl, bytes)
-				retVal,state,err := FindFullTransaction(readBuffer,bytes,&tmpBuffer,&outputLen,tranFoundState)				
-				tranFoundState = state 
-				if(err != nil){
-					log.Printf("TlsSession[%d] Rcvd failed err: %s", s.chnl,err)
-				}
-				if(retVal == true && state == TransactionFound){
-					// Create a new slice with the received data
-					dataToSend := make([]byte, bytes)
-					copy(dataToSend, readBuffer[:bytes])
-					s.readCh <- dataToSend // Send the new slice
+				retVal, state, err := FindFullTransaction(readBuffer, bytes, &tmpBuffer, &outputLen, tranFoundState)
+				tranFoundState = state
+				if err != nil {
+					log.Printf("TlsSession[%d] Rcvd failed err: %s", s.chnl, err)
+					s.readCh1 <- Response{nil,err,state}
 					tranFoundState = NoData
-					outputLen = 0 
-				}else{
-					log.Printf("TlsSession[%d] Rcvd MoreDataPending outputLen: %d", s.chnl,outputLen)
+					outputLen = 0
+					copy(tmpBuffer, zeroSlice) // Copy the zeroed slice into the buffer
+				} else {
+					if retVal && state == TransactionFound {
+						// Create a new slice with the received data
+						dataToSend := make([]byte, outputLen)
+						copy(dataToSend, tmpBuffer[:outputLen])
+						//s.readCh <- dataToSend // Send the new slice
+						s.readCh1 <- Response{dataToSend, nil, state}
+						tranFoundState = NoData
+						outputLen = 0
+						copy(tmpBuffer, zeroSlice) // Copy the zeroed slice into the buffer
+					} else {
+						log.Printf("TlsSession[%d] Rcvd MoreDataPending outputLen: %d Read again", s.chnl, outputLen)
+					}
 				}
 			} else {
 				// Check if the site is active
@@ -238,44 +251,47 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 	}
 }
 
-// Define state constants
+type Status int
+
 const (
-    NoData          = 0 // Indicates that there is no data yet
-    MoreDataPending = 1 // More data is needed
-    TransactionFound = 2 // A full transaction has been found
+	NoData           Status = iota // Indicates that there is no data yet
+	MoreDataPending                // More data is needed
+	TransactionFound               // A full transaction has been found
+	ParseError                     // Indicates a parsing error
 )
+
 // FindFullTransaction processes input bytes and updates the output with complete transactions.
-func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *int, state int) (bool, int, error) {
-    // Ensure the input length is valid
-    if inputLen < 0 || inputLen > len(input) {
-        return false, MoreDataPending, errors.New("invalid input length")
-    }
+func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *int, state Status) (bool, Status, error) {
+	// Ensure the input length is valid
+	if inputLen < 0 || inputLen > len(input) {
+		return false, ParseError, errors.New("invalid input length")
+	}
 
-    // Calculate how many bytes we can safely append
-    availableSpace := PBM_DATA_BUFFER - *outputLen
-    if availableSpace <= 0 {
-        return false, MoreDataPending, errors.New("output buffer overflow")
-    }
+	// Calculate how many bytes we can safely append
+	availableSpace := PBM_DATA_BUFFER - *outputLen
+	if availableSpace <= 0 {
+		return false, ParseError, errors.New("output buffer overflow")
+	}
 
-    // Determine how much input we can append
-    bytesToAppend := inputLen
-    if bytesToAppend > availableSpace {
-        bytesToAppend = availableSpace
-    }
+	// Determine how much input we can append
+	bytesToAppend := inputLen
+	if bytesToAppend > availableSpace {
+		bytesToAppend = availableSpace
+	}
 
-    // Check for ETX (0x03) in the input data
-    if idx := bytes.IndexByte(input[:bytesToAppend], Cfg.EndOfRecordChar); idx != -1 {
-        // Found ETX, append up to and including the ETX
-        copy((*output)[*outputLen:], input[:idx+1]) // Copy the valid portion to output
-        *outputLen += idx + 1                       // Update the output length
-        return true, TransactionFound, nil
-    }
+	// Check for ETX (0x03) in the input data
+	if idx := bytes.IndexByte(input[:bytesToAppend], Cfg.EndOfRecordChar); idx != -1 {
+		// Found ETX, append up to and including the ETX
+		copy((*output)[*outputLen:], input[:idx+1]) // Copy the valid portion to output
+		*outputLen += idx + 1                       // Update the output length
+		return true, TransactionFound, nil
+	}
 
-    // No ETX found, append the input data to output
-    copy((*output)[*outputLen:], input[:bytesToAppend]) // Copy to output
-    *outputLen += bytesToAppend                        // Update the output length
+	// No ETX found, append the input data to output
+	copy((*output)[*outputLen:], input[:bytesToAppend]) // Copy to output
+	*outputLen += bytesToAppend                         // Update the output length
 
-    return false, MoreDataPending, nil
+	return false, MoreDataPending, nil
 }
 
 func (s *TlsSession) reconnect(explicitHandshake bool) error {
@@ -336,38 +352,44 @@ func (s *TlsSession) IsConnected() bool {
 	return s.connected
 }
 
-func (session *TlsSession) Read(appCtx context.Context, index int,requestHeader string) ([]byte, error) {
+func (session *TlsSession) Read(appCtx context.Context, index int, requestHeader string) ([]byte, error) {
 
 	select {
-	case data := <-session.readCh:
-		log.Printf("TlsSession[%d] %d bytes received", index, len(data))
-		validResponse := IsValidResponse(data,requestHeader)
-		if(!validResponse){			
-			return nil,errors.New("Mismatch request/response")
-		}	
-		return data, nil
+	case response := <-session.readCh1:
+		log.Printf("TlsSession[%d] %d bytes received status: %d err: %s", index, len(response.data),response.status,response.err)
+		if(response.status != ParseError){
+			validResponse := IsValidResponse(response.data, requestHeader)
+			if !validResponse {
+				return nil, errors.New("Mismatch request/response")
+			}else{
+				return response.data, nil		
+			}			
+		}else{
+			return nil, errors.New("Parse error")
+		}
+		
 	case <-appCtx.Done():
 		//ctx.IncrementError(index)
 		return nil, appCtx.Err() // Return the context error, typically context.DeadlineExceeded
 	}
 }
 
-// MRG 9/23/24 compare response header vs request header 
+// MRG 9/23/24 compare response header vs request header
 // true - valid response
 // false -- issue with incoming header (potential swapped responses)
 func IsValidResponse(response []byte, requestHeader string) bool {
 
-	//log.Printf("PBM response data(ALL) '%s'", string(response))	
+	//log.Printf("PBM response data(ALL) '%s'", string(response))
 	result := false
-	
-	if len(response) > Cfg.HeaderCheckOffset+Cfg.HeaderCheckLen{
+
+	if len(response) > Cfg.HeaderCheckOffset+Cfg.HeaderCheckLen {
 		if len(requestHeader) > Cfg.HeaderCheckLen {
 			requestHeader = requestHeader[:Cfg.HeaderCheckLen] // truncate to 23 characters if longer
 		}
 		responseHeader := make([]byte, Cfg.HeaderCheckLen)
 		copy(responseHeader, response[Cfg.HeaderCheckOffset:Cfg.HeaderCheckOffset+Cfg.HeaderCheckLen])
-		// Compare response hdr vs claim header		
-		
+		// Compare response hdr vs claim header
+
 		reqHdrString := fmt.Sprintf("%-*s", Cfg.HeaderCheckLen, requestHeader)
 		if string(responseHeader) == reqHdrString {
 			result = true
@@ -377,7 +399,6 @@ func IsValidResponse(response []byte, requestHeader string) bool {
 	}
 	return result
 }
-
 
 // Write sends data through a connection.
 func (session *TlsSession) Write(index int, data []byte) error {
@@ -438,7 +459,6 @@ func (ctx *TlsContext) Write(index int, data []byte) error {
 	session.writeCh <- data
 	return nil
 }
-
 
 // Close closes all TLS sessions.
 func (ctx *TlsContext) Close() {
