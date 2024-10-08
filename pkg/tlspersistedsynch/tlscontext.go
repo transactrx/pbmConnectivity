@@ -371,7 +371,7 @@ func (session *TlsSession) Read(appCtx context.Context, index int, requestHeader
 
 	select {
 	case response := <-session.readCh1:
-		log.Printf("TlsSession[%d] %d bytes received status: %d err: %v", index, len(response.data),response.status,response.err)
+		log.Printf("TlsSession[%d] %d bytes received status: %s err: %v", index, len(response.data),response.status,response.err)
 		if(response.status != ParseError){
 			validResponse := IsValidResponse(response.data, requestHeader)
 			if !validResponse {
