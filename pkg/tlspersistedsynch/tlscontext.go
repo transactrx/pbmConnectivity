@@ -164,7 +164,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 	go func() {
 		for {
 			if s.IsConnected() {
-				log.Printf("TlsSession[%d] reading...", s.chnl)
+				log.Printf("TlsSession[%d] reading... status: %s", s.chnl,tranFoundState)
 				copy(readBuffer, zeroSlice) // Copy the zeroed slice into the buffer
 				bytes, err := s.tlsConn.Read(readBuffer)
 				if err != nil || bytes <= 0 {
@@ -178,7 +178,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				retVal, state, err := FindFullTransaction(readBuffer, bytes, &tmpBuffer, &outputLen, tranFoundState)
 				tranFoundState = state
 				if err != nil {
-					log.Printf("TlsSession[%d] Rcvd failed err: %s", s.chnl, err)
+					log.Printf("TlsSession[%d] FindFullTransaction failed err: %s status: %s", s.chnl, err,state)
 					s.readCh1 <- Response{nil,err,state}
 					tranFoundState = NoData
 					outputLen = 0
@@ -194,7 +194,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 						outputLen = 0
 						copy(tmpBuffer, zeroSlice) // Copy the zeroed slice into the buffer
 					} else {
-						log.Printf("TlsSession[%d] Rcvd MoreDataPending outputLen: %d Read again", s.chnl, outputLen)
+						log.Printf("TlsSession[%d] Rcvd outputLen: %d status: %s Read again", s.chnl, outputLen,state)
 					}
 				}
 			} else {
@@ -259,6 +259,21 @@ const (
 	TransactionFound               // A full transaction has been found
 	ParseError                     // Indicates a parsing error
 )
+// Implement the String() method for the Status type
+func (s Status) String() string {
+    switch s {
+    case NoData:
+        return "NoData"
+    case MoreDataPending:
+        return "MoreDataPending"
+    case TransactionFound:
+        return "TransactionFound"
+    case ParseError:
+        return "ParseError"
+    default:
+        return "Unknown"
+    }
+}
 
 // FindFullTransaction processes input bytes and updates the output with complete transactions.
 func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *int, state Status) (bool, Status, error) {
@@ -356,7 +371,7 @@ func (session *TlsSession) Read(appCtx context.Context, index int, requestHeader
 
 	select {
 	case response := <-session.readCh1:
-		log.Printf("TlsSession[%d] %d bytes received status: %d err: %s", index, len(response.data),response.status,response.err)
+		log.Printf("TlsSession[%d] %d bytes received status: %d err: %v", index, len(response.data),response.status,response.err)
 		if(response.status != ParseError){
 			validResponse := IsValidResponse(response.data, requestHeader)
 			if !validResponse {
