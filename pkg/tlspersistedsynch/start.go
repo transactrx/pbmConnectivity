@@ -116,10 +116,47 @@ func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 	// TODO MRG 10.8.24 - make sure this is done thru config 
 	// for now hardcoding it
 
-	Cfg.HeaderCheck 		= true
-	Cfg.HeaderCheckOffset   = 17 
-	Cfg.HeaderCheckLen		= 23
-	Cfg.EndOfRecordChar     = 0x03
+	tmpBool, ok1 = cfgMap["headerCheck"].(bool)
+
+	if ok1 {
+		Cfg.HeaderCheck = tmpBool
+	} else {
+		log.Printf("HeaderCheck not Provided failed")
+		Cfg.HeaderCheck = false
+	}
+
+	tmp, ok = cfgMap["headerCheckOffset"].(string)
+
+	if ok {
+		num, err := strconv.Atoi(tmp)
+		if err == nil {
+			Cfg.HeaderCheckOffset = num
+		} 
+	} else {
+		log.Printf("HeaderCheckOffset not Provided failed")
+	}
+	tmp, ok = cfgMap["HeaderCheckLen"].(string)
+
+	if ok {
+		num, err := strconv.Atoi(tmp)
+		if err == nil {
+			Cfg.HeaderCheckLen = num
+		} 
+	} else {
+		log.Printf("HeaderCheckLen not Provided failed")
+	}
+	
+	tmp, ok = cfgMap["endOfRecordChar"].(string)
+
+	if ok {
+		if(tmp == "EOT"){
+			Cfg.EndOfRecordChar = 0x04
+		}else {
+			Cfg.EndOfRecordChar = 0x04
+		}
+	} else {
+		log.Printf("Start queue time-out not Provided failed")
+	}
  
 	// run TlsContext
 	Ctx, err = NewTlsContext(Cfg)
