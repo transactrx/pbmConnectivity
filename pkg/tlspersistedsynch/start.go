@@ -152,7 +152,7 @@ func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 		if(tmp == "EOT"){
 			Cfg.EndOfRecordChar = 0x04
 		}else {
-			Cfg.EndOfRecordChar = 0x04
+			Cfg.EndOfRecordChar = 0x03
 		}
 	} else {
 		log.Printf("Start queue time-out not Provided failed")
