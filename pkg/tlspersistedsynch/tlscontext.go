@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -26,6 +28,7 @@ type Response struct {
 
 // TlsSession represents a single TLS session.
 type TlsSession struct {
+	name      string 
 	address   string
 	tlsConn   *tls.Conn
 	readCh    chan []byte
@@ -49,6 +52,42 @@ type TlsContext struct {
 	sites     []*Site
 	tcpDialer *net.Dialer
 }
+func isIPAddress(s string) bool {
+	ip := net.ParseIP(s)
+	return ip != nil
+}
+func createSessionName(i int, siteURL string) string {
+	// Get the local machine's hostname
+	hostName, _ := os.Hostname()
+
+	// Check if the hostname is an IP address
+	var hostIdentifier string
+	if isIPAddress(hostName) {
+		// Extract last octet of the hostname IP
+		hostParts := strings.Split(hostName, ".")
+		hostIdentifier = hostParts[len(hostParts)-1]
+	} else {
+		// Use full hostname if it's not an IP address
+		hostIdentifier = hostName
+	}
+
+	// Check if the siteURL is an IP address
+	var targetIdentifier string
+	if isIPAddress(siteURL) {
+		// Extract last octet of the site URL IP
+		urlParts := strings.Split(siteURL, ".")
+		targetIdentifier = urlParts[len(urlParts)-1]
+	} else {
+		// Use full site URL if it's not an IP address
+		targetIdentifier = siteURL
+	}
+
+	// Construct the name using the last octets or full strings
+	tmpName := fmt.Sprintf("tls[ch:%d;f:%s;t:%s]", i, hostIdentifier, targetIdentifier)
+
+	return tmpName
+}
+
 
 // NewTlsContext creates a new TlsContext with predefined sessions.
 func NewTlsContext(appCfg Config) (*TlsContext, error) {
@@ -80,6 +119,7 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 		addr := site.URL + ":" + appCfg.PbmPort
 
 		session := &TlsSession{
+			name:  createSessionName(i,site.URL),
 			address:   addr,
 			readCh:    make(chan []byte),
 			readCh1:   make(chan Response),
@@ -164,21 +204,21 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 	go func() {
 		for {
 			if s.IsConnected() {
-				log.Printf("TlsSession[%d] reading... status: %s", s.chnl,tranFoundState)
+				log.Printf("%s reading... status: %s",s.name ,tranFoundState)
 				copy(readBuffer, zeroSlice) // Copy the zeroed slice into the buffer
 				bytes, err := s.tlsConn.Read(readBuffer)
 				if err != nil || bytes <= 0 {
 					// MRG 8.21.24 let the monitor routine disconnect after error count
 					ctx.DisconnectSession(s.chnl)
-					log.Printf("TlsSession[%d] Read failed: %s", s.chnl, err)
+					log.Printf("%s Read failed: %s", s.name, err)
 					time.Sleep(1 * time.Second)
 					continue
 				}
-				log.Printf("TlsSession[%d] Rcvd %d bytes", s.chnl, bytes)
+				log.Printf("%s Rcvd %d bytes", s.name, bytes)
 				retVal, state, err := FindFullTransaction(readBuffer, bytes, &tmpBuffer, &outputLen, tranFoundState)
 				tranFoundState = state
 				if err != nil {
-					log.Printf("TlsSession[%d] FindFullTransaction failed err: %s status: %s", s.chnl, err,state)
+					log.Printf("%s FindFullTransaction failed err: %s status: %s", s.name, err,state)
 					s.readCh1 <- Response{nil,err,state}
 					tranFoundState = NoData
 					outputLen = 0
@@ -194,7 +234,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 						outputLen = 0
 						copy(tmpBuffer, zeroSlice) // Copy the zeroed slice into the buffer
 					} else {
-						log.Printf("TlsSession[%d] Rcvd outputLen: %d status: %s Read again", s.chnl, outputLen,state)
+						log.Printf("%s Rcvd outputLen: %d status: %s Read again", s.name, outputLen,state)
 					}
 				}
 			} else {
@@ -206,11 +246,11 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				}
 
 				if err := s.reconnect(true); err != nil {
-					log.Printf("TlsSession[%d] Reconnection failed: %s", s.chnl, err)
+					log.Printf("%s Reconnection failed: %s", s.name, err)
 					time.Sleep(5 * time.Second)
 					continue
 				}
-				log.Printf("TlsSession[%d] Pausing to ensure LB is connected to vendor", s.chnl)
+				log.Printf("%s Pausing to ensure LB is connected to vendor", s.chnl)
 				time.Sleep(6 * time.Second)
 				s.setConnected(true)
 			}
@@ -224,23 +264,23 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 			if s.IsConnected() && s.tlsConn != nil {
 				bytes, err := s.tlsConn.Write(data)
 				if err != nil {
-					log.Printf("TlsSession[%d] Write failed: %s", s.chnl, err)
+					log.Printf("%s Write failed: %s", s.name, err)
 					s.setConnected(false)
 					continue
 				} else {
-					log.Printf("TlsSession[%d] Snd %d bytes", s.chnl, bytes)
+					log.Printf("%s Snd %d bytes", s.name, bytes)
 				}
 			} else {
-				log.Printf("TlsSession[%d] Write failed connection object is nil", s.chnl)
+				log.Printf("%s Write failed connection object is nil", s.chnl)
 			}
 
 		case <-s.closeCh:
 
 			if s.tlsConn != nil {
-				log.Printf("TlsSession[%d] closing connection...", s.chnl)
+				log.Printf("%s closing connection...", s.chnl)
 				s.tlsConn.Close()
 			} else {
-				log.Printf("TlsSession[%d] s.conn.close - conn was null", s.chnl)
+				log.Printf("%s s.conn.close - conn was null", s.chnl)
 			}
 
 			return
@@ -310,7 +350,7 @@ func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *
 }
 
 func (s *TlsSession) reconnect(explicitHandshake bool) error {
-	log.Printf("TlsSession[%d] connect connecting to '%s' Pbm Certificate Insecure Skip Verify: %t splitHandshake: %t", s.chnl, s.address, s.appConfig.PbmInsecureSkipVerify, explicitHandshake)
+	log.Printf("%s connect connecting to '%s' Pbm Certificate Insecure Skip Verify: %t splitHandshake: %t", s.name, s.address, s.appConfig.PbmInsecureSkipVerify, explicitHandshake)
 	if explicitHandshake { // split call using tcp then tls - in order to configure keep-alive
 		// create dialer with keep-alive and connect time-out
 		timeout := 5 * time.Second
@@ -329,11 +369,11 @@ func (s *TlsSession) reconnect(explicitHandshake bool) error {
 		conn.SetReadDeadline(time.Now().Add(timeout))
 		err = conn.Handshake()
 		if err != nil {
-			log.Printf("TlsSession[%d] connect connecting to '%s' handshake failed err: %v", s.chnl, s.address, err)
+			log.Printf("%s connect connecting to '%s' handshake failed err: %v", s.name, s.address, err)
 			tcpConn.Close()
 			return err
 		}
-		log.Printf("TlsSession[%d] connect connecting to '%s' handshake success", s.chnl, s.address)
+		log.Printf("%s connect connecting to '%s' handshake success", s.name, s.address)
 		// After a successful handshake, set the read deadline to "never"
 		conn.SetReadDeadline(time.Time{})
 		s.mu.Lock()
@@ -349,7 +389,7 @@ func (s *TlsSession) reconnect(explicitHandshake bool) error {
 		s.tlsConn = conn
 		s.mu.Unlock()
 	}
-	log.Printf("TlsSession[%d] connect connected to '%s'", s.chnl, s.address)
+	log.Printf("%s connect connected to '%s'", s.name, s.address)
 	return nil
 }
 
@@ -367,11 +407,11 @@ func (s *TlsSession) IsConnected() bool {
 	return s.connected
 }
 
-func (session *TlsSession) Read(appCtx context.Context, index int, requestHeader string) ([]byte, error) {
+func (s *TlsSession) Read(appCtx context.Context, index int, requestHeader string) ([]byte, error) {
 
 	select {
-	case response := <-session.readCh1:
-		log.Printf("TlsSession[%d] %d bytes received status: %s err: %v", index, len(response.data),response.status,response.err)
+	case response := <-s.readCh1:
+		log.Printf("%s %d bytes received status: %s err: %v", s.name, len(response.data),response.status,response.err)
 		if(response.status != ParseError){
 			validResponse := IsValidResponse(response.data, requestHeader)
 			if !validResponse {
@@ -416,10 +456,10 @@ func IsValidResponse(response []byte, requestHeader string) bool {
 }
 
 // Write sends data through a connection.
-func (session *TlsSession) Write(index int, data []byte) error {
-	log.Printf("TlsSession[%d] Snding %d bytes", index, len(data))
+func (s *TlsSession) Write(index int, data []byte) error {
+	log.Printf("%s Snding %d bytes", s.name, len(data))
 	//session := s
-	session.writeCh <- data
+	s.writeCh <- data
 	return nil
 }
 
