@@ -9,6 +9,8 @@ import (
 	"log"
 	"net"
 	"os"
+
+	//"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,7 +30,7 @@ type Response struct {
 
 // TlsSession represents a single TLS session.
 type TlsSession struct {
-	name      string 
+	name      string
 	address   string
 	tlsConn   *tls.Conn
 	readCh    chan []byte
@@ -52,6 +54,7 @@ type TlsContext struct {
 	sites     []*Site
 	tcpDialer *net.Dialer
 }
+
 func isIPAddress(s string) bool {
 	ip := net.ParseIP(s)
 	return ip != nil
@@ -60,11 +63,14 @@ func extractLastOctetFromHostname(hostName string) string {
 	// Check if the hostname starts with "ip-" and is in the expected format
 	if strings.HasPrefix(hostName, "ip-") {
 		// Split by hyphen to get the components (ip-10-103-4-90 will split into parts)
-		parts := strings.Split(hostName, "-")
-		
-		// Ensure there are enough parts to represent an IP address (ip-x-x-x-x)
-		if len(parts) >= 5 {
-			return parts[4] // Get the last octet (e.g., 90)
+		parts := strings.Split(hostName, ".")
+
+		if len(parts) > 0 {
+			ipParts := strings.Split(parts[0], "-")
+			// Ensure there are enough parts to represent an IP address (ip-x-x-x-x)
+			if len(ipParts) >= 5 {
+				return ipParts[4] // Get the last octet (e.g., 90)
+			}
 		}
 	}
 
@@ -75,7 +81,6 @@ func createSessionName(i int, siteURL string) string {
 	// Get the local machine's hostname
 	hostName, _ := os.Hostname()
 	hostLastOctet := extractLastOctetFromHostname(hostName)
-
 
 	// Check if the siteURL is an IP address
 	var targetIdentifier string
@@ -93,7 +98,6 @@ func createSessionName(i int, siteURL string) string {
 
 	return tmpName
 }
-
 
 // NewTlsContext creates a new TlsContext with predefined sessions.
 func NewTlsContext(appCfg Config) (*TlsContext, error) {
@@ -125,7 +129,7 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 		addr := site.URL + ":" + appCfg.PbmPort
 
 		session := &TlsSession{
-			name:  createSessionName(i,site.URL),
+			name:      createSessionName(i, site.URL),
 			address:   addr,
 			readCh:    make(chan []byte),
 			readCh1:   make(chan Response),
@@ -205,12 +209,11 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 	// MRG 8/13/24 handle connection then the 'read' data to ensure both are in synched
 	tranFoundState := NoData
 	outputLen := 0 // Current number of valid bytes in output
-	
 
 	go func() {
 		for {
 			if s.IsConnected() {
-				log.Printf("%s reading... status: %s",s.name ,tranFoundState)
+				log.Printf("%s reading... status: %s", s.name, tranFoundState)
 				copy(readBuffer, zeroSlice) // Copy the zeroed slice into the buffer
 				bytes, err := s.tlsConn.Read(readBuffer)
 				if err != nil || bytes <= 0 {
@@ -224,8 +227,8 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				retVal, state, err := FindFullTransaction(readBuffer, bytes, &tmpBuffer, &outputLen, tranFoundState)
 				tranFoundState = state
 				if err != nil {
-					log.Printf("%s FindFullTransaction failed err: %s status: %s", s.name, err,state)
-					s.readCh1 <- Response{nil,err,state}
+					log.Printf("%s FindFullTransaction failed err: %s status: %s", s.name, err, state)
+					s.readCh1 <- Response{nil, err, state}
 					tranFoundState = NoData
 					outputLen = 0
 					copy(tmpBuffer, zeroSlice) // Copy the zeroed slice into the buffer
@@ -240,7 +243,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 						outputLen = 0
 						copy(tmpBuffer, zeroSlice) // Copy the zeroed slice into the buffer
 					} else {
-						log.Printf("%s Rcvd outputLen: %d status: %s Read again", s.name, outputLen,state)
+						log.Printf("%s Rcvd outputLen: %d status: %s Read again", s.name, outputLen, state)
 					}
 				}
 			} else {
@@ -305,20 +308,21 @@ const (
 	TransactionFound               // A full transaction has been found
 	ParseError                     // Indicates a parsing error
 )
+
 // Implement the String() method for the Status type
 func (s Status) String() string {
-    switch s {
-    case NoData:
-        return "NoData"
-    case MoreDataPending:
-        return "MoreDataPending"
-    case TransactionFound:
-        return "TransactionFound"
-    case ParseError:
-        return "ParseError"
-    default:
-        return "Unknown"
-    }
+	switch s {
+	case NoData:
+		return "NoData"
+	case MoreDataPending:
+		return "MoreDataPending"
+	case TransactionFound:
+		return "TransactionFound"
+	case ParseError:
+		return "ParseError"
+	default:
+		return "Unknown"
+	}
 }
 
 // FindFullTransaction processes input bytes and updates the output with complete transactions.
@@ -417,18 +421,18 @@ func (s *TlsSession) Read(appCtx context.Context, index int, requestHeader strin
 
 	select {
 	case response := <-s.readCh1:
-		log.Printf("%s %d bytes received status: %s err: %v", s.name, len(response.data),response.status,response.err)
-		if(response.status != ParseError){
+		log.Printf("%s %d bytes received status: %s err: %v", s.name, len(response.data), response.status, response.err)
+		if response.status != ParseError {
 			validResponse := IsValidResponse(response.data, requestHeader)
 			if !validResponse {
 				return nil, errors.New("Mismatch request/response")
-			}else{
-				return response.data, nil		
-			}			
-		}else{
+			} else {
+				return response.data, nil
+			}
+		} else {
 			return nil, errors.New("Parse error")
 		}
-		
+
 	case <-appCtx.Done():
 		//ctx.IncrementError(index)
 		return nil, appCtx.Err() // Return the context error, typically context.DeadlineExceeded
