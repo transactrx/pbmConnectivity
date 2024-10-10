@@ -250,7 +250,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					time.Sleep(5 * time.Second)
 					continue
 				}
-				log.Printf("%s Pausing to ensure LB is connected to vendor", s.chnl)
+				log.Printf("%s Pausing to ensure LB is connected to vendor", s.name)
 				time.Sleep(6 * time.Second)
 				s.setConnected(true)
 			}
@@ -271,16 +271,16 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					log.Printf("%s Snd %d bytes", s.name, bytes)
 				}
 			} else {
-				log.Printf("%s Write failed connection object is nil", s.chnl)
+				log.Printf("%s Write failed connection object is nil", s.name)
 			}
 
 		case <-s.closeCh:
 
 			if s.tlsConn != nil {
-				log.Printf("%s closing connection...", s.chnl)
+				log.Printf("%s closing connection...", s.name)
 				s.tlsConn.Close()
 			} else {
-				log.Printf("%s s.conn.close - conn was null", s.chnl)
+				log.Printf("%s s.conn.close - conn was null", s.name)
 			}
 
 			return
