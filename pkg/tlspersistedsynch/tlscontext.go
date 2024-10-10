@@ -56,20 +56,26 @@ func isIPAddress(s string) bool {
 	ip := net.ParseIP(s)
 	return ip != nil
 }
+func extractLastOctetFromHostname(hostName string) string {
+	// Check if the hostname starts with "ip-" and is in the expected format
+	if strings.HasPrefix(hostName, "ip-") {
+		// Split by hyphen to get the components (ip-10-103-4-90 will split into parts)
+		parts := strings.Split(hostName, "-")
+		
+		// Ensure there are enough parts to represent an IP address (ip-x-x-x-x)
+		if len(parts) >= 5 {
+			return parts[4] // Get the last octet (e.g., 90)
+		}
+	}
+
+	// If not in the expected format, return the full hostname as fallback
+	return hostName
+}
 func createSessionName(i int, siteURL string) string {
 	// Get the local machine's hostname
 	hostName, _ := os.Hostname()
+	hostLastOctet := extractLastOctetFromHostname(hostName)
 
-	// Check if the hostname is an IP address
-	var hostIdentifier string
-	if isIPAddress(hostName) {
-		// Extract last octet of the hostname IP
-		hostParts := strings.Split(hostName, ".")
-		hostIdentifier = hostParts[len(hostParts)-1]
-	} else {
-		// Use full hostname if it's not an IP address
-		hostIdentifier = hostName
-	}
 
 	// Check if the siteURL is an IP address
 	var targetIdentifier string
@@ -83,7 +89,7 @@ func createSessionName(i int, siteURL string) string {
 	}
 
 	// Construct the name using the last octets or full strings
-	tmpName := fmt.Sprintf("tls[ch:%d;f:%s;t:%s]", i, hostIdentifier, targetIdentifier)
+	tmpName := fmt.Sprintf("tls[ch:%d;f:%s;t:%s]", i, hostLastOctet, targetIdentifier)
 
 	return tmpName
 }
