@@ -88,6 +88,8 @@ func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duratio
 	// Set a read deadline for the connection
 	//conn.SetReadDeadline(time.Now().Add(timeout))
 	// Send a message to the server
+	log.Printf("SLEEPING 200 mseconds")
+	time.Sleep(300 * time.Millisecond)
 	bytes, err := conn.Write([]byte(claim))
 	if err != nil {
 		log.Printf("tlssynch.submitRequest tid: %s Write data error: '%s'", tid, err)
@@ -95,8 +97,8 @@ func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duratio
 	} else {
 		log.Printf("tlssynch.submitRequest tid: %s Write Snd %d bytes OK", tid, bytes)
 	}
-	log.Printf("tlssynch.submitRequest tls.Write %s",string(claim))
-	log.Printf("tlssynch.submitRequest tls.Write %v",claim)
+	//log.Printf("tlssynch.submitRequest tls.Write %s",string(claim))
+	//log.Printf("tlssynch.submitRequest tls.Write %v",claim)
 	
 	// Receive and print the response from the server
 	buffer := make([]byte, PBM_DATA_BUFFER)
