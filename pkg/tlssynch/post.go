@@ -95,6 +95,9 @@ func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duratio
 	} else {
 		log.Printf("tlssynch.submitRequest tid: %s Write Snd %d bytes OK", tid, bytes)
 	}
+	log.Printf("tlssynch.submitRequest tls.Write %s",string(claim))
+	log.Printf("tlssynch.submitRequest tls.Write %v",claim)
+	
 	// Receive and print the response from the server
 	buffer := make([]byte, PBM_DATA_BUFFER)
 	conn.SetReadDeadline(time.Now().Add(timeout))
