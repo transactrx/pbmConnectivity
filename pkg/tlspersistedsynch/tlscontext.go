@@ -223,7 +223,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					time.Sleep(1 * time.Second)
 					continue
 				}
-				log.Printf("%s Rcvd %d bytes", s.name, bytes)
+				log.Printf("%s Rcvd %d bytes data: '%s'", s.name, bytes,readBuffer)
 				retVal, state, err := FindFullTransaction(readBuffer, bytes, &tmpBuffer, &outputLen, tranFoundState)
 				tranFoundState = state
 				if err != nil {
