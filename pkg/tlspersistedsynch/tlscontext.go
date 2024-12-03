@@ -223,7 +223,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					time.Sleep(1 * time.Second)
 					continue
 				}
-				log.Printf("%s Rcvd %d bytes data: '%s'", s.name, bytes,readBuffer)
+				log.Printf("%s Rcvd %d bytes data: '%s'", s.name, bytes, readBuffer)
 				retVal, state, err := FindFullTransaction(readBuffer, bytes, &tmpBuffer, &outputLen, tranFoundState)
 				tranFoundState = state
 				if err != nil {
@@ -344,12 +344,22 @@ func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *
 		bytesToAppend = availableSpace
 	}
 
-	// Check for ETX (0x03) in the input data
-	if idx := bytes.IndexByte(input[:bytesToAppend], Cfg.EndOfRecordChar); idx != -1 {
-		// Found ETX, append up to and including the ETX
-		copy((*output)[*outputLen:], input[:idx+1]) // Copy the valid portion to output
-		*outputLen += idx + 1                       // Update the output length
+	if Cfg.EndOfRecordChar == 0x00 { // TODO: write code to find end of transaction using ASCII Len
+		if inputLen > availableSpace {
+			return false, ParseError, errors.New("input exceeds output buffer capacity")
+		}
+		copy((*output)[*outputLen:], input[:inputLen]) // Copy the valid portion to output
+		*outputLen += inputLen // update the output len 
 		return true, TransactionFound, nil
+	} else {
+		// Check for ETX (0x03) in the input data
+		if idx := bytes.IndexByte(input[:bytesToAppend], Cfg.EndOfRecordChar); idx != -1 {
+			// Found ETX, append up to and including the ETX
+			copy((*output)[*outputLen:], input[:idx+1]) // Copy the valid portion to output
+			*outputLen += idx + 1                       // Update the output length
+			return true, TransactionFound, nil
+		}
+
 	}
 
 	// No ETX found, append the input data to output
