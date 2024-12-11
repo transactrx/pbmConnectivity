@@ -144,8 +144,8 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 		go session.handleConnection(ctx) // Pass ctx to handleConnection
 	}
 
-	// Start monitoring with a threshold of 2 errors and a check interval of 10 seconds
-	ctx.StartMonitoring(2, 10*time.Second)
+	// Start monitoring with a threshold of 5 errors and a check interval of 10 seconds
+	ctx.StartMonitoring(5, 10*time.Second)
 
 	return ctx, nil
 }
@@ -191,6 +191,7 @@ func (ctx *TlsContext) StartMonitoring(threshold int, interval time.Duration) {
 				session.mu.Lock()
 				if session.errors > threshold {
 					session.mu.Unlock()
+				  	log.Printf("%s monitor thread threshold reached current: %d threshold: %d", session.name, session.errors, threshold)		
 					ctx.DisconnectSession(i)
 				} else {
 					session.mu.Unlock()
