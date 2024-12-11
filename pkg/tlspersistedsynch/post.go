@@ -55,11 +55,12 @@ func (pc *TLSPersistedSyncConnect) Post(claim []byte, header map[string][]string
 	//hdrLen,_ := strconv.Atoi(headerCheckLen)
 	response, err := session.Read(appCtx, index,requestHeader)
 	if err != nil {
-		Ctx.IncrementError(index)
+		
 		if err == context.DeadlineExceeded {
-			log.Printf("tlspersynch.post[%d]  tid: %s read failed error: timeout disconnecting",index, tid)
+			Ctx.IncrementError(index)
+			log.Printf("tlspersynch.post[%d]  tid: %s read failed error: timeout error++",index, tid)
 			Ctx.ReleaseConnection(index)
-			Ctx.DisconnectSession(index)			 
+			//Ctx.DisconnectSession(index)			 
 			return nil, nil, pbmlib.ErrorCode.TRX05
 		} else {
 			log.Printf("tlspersynch.post[%d]  tid: %s read failed error: %v",index,tid ,err)
