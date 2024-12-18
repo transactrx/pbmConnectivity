@@ -210,6 +210,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 	// MRG 8/13/24 handle connection then the 'read' data to ensure both are in synched
 	tranFoundState := NoData
 	outputLen := 0 // Current number of valid bytes in output
+	expectedMsgLen := 0 // if ASCII len 
 
 	go func() {
 		for {
@@ -226,13 +227,14 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				}
 				//log.Printf("%s Rcvd %d bytes data: '%s'", s.name, bytes, readBuffer)
 				log.Printf("%s Rcvd %d bytes", s.name, bytes)
-				retVal, state, err := FindFullTransaction(readBuffer, bytes, &tmpBuffer, &outputLen, tranFoundState)
+				retVal, state, err := FindFullTransaction(readBuffer, bytes, &tmpBuffer, &outputLen, tranFoundState,&expectedMsgLen)
 				tranFoundState = state
 				if err != nil {
 					log.Printf("%s FindFullTransaction failed err: %s status: %s", s.name, err, state)
 					s.readCh1 <- Response{nil, err, state}
 					tranFoundState = NoData
 					outputLen = 0
+					expectedMsgLen = 0 
 					copy(tmpBuffer, zeroSlice) // Copy the zeroed slice into the buffer
 				} else {
 					if retVal && state == TransactionFound {
@@ -243,6 +245,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 						s.readCh1 <- Response{dataToSend, nil, state}
 						tranFoundState = NoData
 						outputLen = 0
+						expectedMsgLen = 0
 						copy(tmpBuffer, zeroSlice) // Copy the zeroed slice into the buffer
 					} else {
 						log.Printf("%s Rcvd outputLen: %d status: %s Read again", s.name, outputLen, state)
@@ -326,10 +329,55 @@ func (s Status) String() string {
 		return "Unknown"
 	}
 }
+func FindFullTransactionUseASCIILen(input []byte, inputLen int, output *[]byte, outputLen *int, state Status, expectedMsgLen *int) (bool, Status, error) {
+	headerLen := Cfg.MessageLenWidth
+	headerOffset := Cfg.MessageLenOffset
+//	log.Printf("ASCIILEN - expected: %d, outputLen: %d headerLen: %d headerOffset: %d",*expectedMsgLen,*outputLen,headerLen,headerOffset)
+
+	// First pass: Process the header to determine expected message length
+	if *outputLen == 0 {
+		if inputLen < headerOffset+headerLen {
+			return false, MoreDataPending, nil // Not enough data to process header
+		}
+
+		// Extract header to determine the expected length (length of data after the header)
+		asciiHeader := input[headerOffset : headerOffset+headerLen]
+		expectedLen, err := strconv.Atoi(strings.TrimSpace(string(asciiHeader)))
+		if err != nil || expectedLen <= 0 {
+			return false, ParseError, errors.New("invalid ASCII header length")
+		}
+		*expectedMsgLen = expectedLen + headerLen + headerOffset// Add header and offset to total expected length
+	}
+
+	// Calculate remaining bytes needed to complete the message
+	remaining := *expectedMsgLen - *outputLen
+	if remaining <= 0 {
+		return false, ParseError, errors.New("message already complete or overflow")
+	}
+
+	// Copy the entire buffer to the output
+	bytesToCopy := inputLen
+	if bytesToCopy > remaining {
+		bytesToCopy = remaining
+	}
+
+	copy((*output)[*outputLen:], input[:bytesToCopy])
+	*outputLen += bytesToCopy
+
+	// Check if the message is complete
+	if *outputLen == *expectedMsgLen {
+		return true, TransactionFound, nil
+	}
+	return false, MoreDataPending, nil
+}
 
 // FindFullTransaction processes input bytes and updates the output with complete transactions.
-func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *int, state Status) (bool, Status, error) {
+func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *int, state Status, expectedMsgLen *int) (bool, Status, error) {
 	// Ensure the input length is valid
+	var tranFound bool = false
+	var tranStatus Status = MoreDataPending
+	var err error
+
 	if inputLen < 0 || inputLen > len(input) {
 		return false, ParseError, errors.New("invalid input length")
 	}
@@ -340,20 +388,23 @@ func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *
 		return false, ParseError, errors.New("output buffer overflow")
 	}
 
-	// Determine how much input we can append
-	bytesToAppend := inputLen
-	if bytesToAppend > availableSpace {
-		bytesToAppend = availableSpace
-	}
-
 	if Cfg.EndOfRecordChar == 0x00 { // TODO: write code to find end of transaction using ASCII Len
-		if inputLen > availableSpace {
-			return false, ParseError, errors.New("input exceeds output buffer capacity")
-		}
-		copy((*output)[*outputLen:], input[:inputLen]) // Copy the valid portion to output
-		*outputLen += inputLen                         // update the output len
-		return true, TransactionFound, nil
+
+		tranFound, tranStatus, err = FindFullTransactionUseASCIILen(input, inputLen, output, outputLen, state, expectedMsgLen)
+		return tranFound, tranStatus, err
+
+		// if inputLen > availableSpace {
+		// 	return false, ParseError, errors.New("input exceeds output buffer capacity")
+		// }
+		// copy((*output)[*outputLen:], input[:inputLen]) // Copy the valid portion to output
+		// *outputLen += inputLen                         // update the output len
+		// return true, TransactionFound, nil
 	} else {
+		// Determine how much input we can append
+		bytesToAppend := inputLen
+		if bytesToAppend > availableSpace {
+			bytesToAppend = availableSpace
+		}
 		// Check for ETX (0x03) in the input data
 		if idx := bytes.IndexByte(input[:bytesToAppend], Cfg.EndOfRecordChar); idx != -1 {
 			// Found ETX, append up to and including the ETX
@@ -361,19 +412,17 @@ func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *
 			*outputLen += idx + 1                       // Update the output length
 			return true, TransactionFound, nil
 		}
-
+		// No ETX found, append the input data to output
+		copy((*output)[*outputLen:], input[:bytesToAppend]) // Copy to output
+		*outputLen += bytesToAppend                         // Update the output length
 	}
-
-	// No ETX found, append the input data to output
-	copy((*output)[*outputLen:], input[:bytesToAppend]) // Copy to output
-	*outputLen += bytesToAppend                         // Update the output length
 
 	return false, MoreDataPending, nil
 }
 
-func (s *TlsSession) reconnect(explicitHandshake bool) error {
-	log.Printf("%s connect connecting to '%s' Pbm Certificate Insecure Skip Verify: %t splitHandshake: %t", s.name, s.address, s.appConfig.PbmInsecureSkipVerify, explicitHandshake)
-	if explicitHandshake { // split call using tcp then tls - in order to configure keep-alive
+func (s *TlsSession) reconnect(splitHandshake bool) error {
+	log.Printf("%s connect connecting to '%s' Pbm Certificate Insecure Skip Verify: %t splitHandshake: %t", s.name, s.address, s.appConfig.PbmInsecureSkipVerify, splitHandshake)
+	if splitHandshake { // split call using tcp then tls - in order to configure keep-alive
 		// create dialer with keep-alive and connect time-out
 		timeout := 5 * time.Second
 		keepAliveInterval := 5 * time.Minute

@@ -16,6 +16,8 @@ var Cfg Config
 
 func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
 
+	log.Printf("TLSSyncConnect::Start")
+
 	tmp, ok := cfgMap["pbmUrl"].(string)
 	if ok {
 		Cfg.PbmUrl = tmp
