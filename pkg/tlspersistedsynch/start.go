@@ -2,6 +2,7 @@ package tlspersistedsynch
 
 import (
 	"log"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -28,7 +29,7 @@ type Config struct {
 	// Find End of Message Using ASCII Len in message 
 	MessageLenOffset int 
 	MessageLenWidth  int 
-
+	DebugEnabled bool
 }
 
 const PBM_DATA_BUFFER = 16384
@@ -183,7 +184,17 @@ func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 		log.Printf("HeaderCheckLen not Provided failed")
 	}
 
+	tmpBool, ok1 = cfgMap["debugEnabled"].(bool)
 
+	if ok1 {
+		Cfg.DebugEnabled= tmpBool
+	} else {
+		log.Printf("HeaderCheck not Provided failed")
+		Cfg.DebugEnabled = false
+	}
+
+	PrintStructFieldsAndValues(Cfg)
+	
 	// run TlsContext
 	Ctx, err = NewTlsContext(Cfg)
 	if err != nil {
@@ -192,4 +203,17 @@ func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 	}
 
 	return nil
+}
+
+
+
+func PrintStructFieldsAndValues(data interface{}) {
+	val := reflect.ValueOf(data)
+	typ := val.Type()
+	
+	for i := 0; i < val.NumField(); i++ {
+		field := typ.Field(i)
+		fieldValue := val.Field(i).Interface()
+		log.Printf("%s: %v\n", field.Name, fieldValue)
+	}
 }

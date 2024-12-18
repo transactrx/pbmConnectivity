@@ -209,8 +209,8 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 	zeroSlice := make([]byte, len(readBuffer)) // Create a zeroed slice of the same length
 	// MRG 8/13/24 handle connection then the 'read' data to ensure both are in synched
 	tranFoundState := NoData
-	outputLen := 0 // Current number of valid bytes in output
-	expectedMsgLen := 0 // if ASCII len 
+	outputLen := 0      // Current number of valid bytes in output
+	expectedMsgLen := 0 // if ASCII len
 
 	go func() {
 		for {
@@ -227,14 +227,14 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				}
 				//log.Printf("%s Rcvd %d bytes data: '%s'", s.name, bytes, readBuffer)
 				log.Printf("%s Rcvd %d bytes", s.name, bytes)
-				retVal, state, err := FindFullTransaction(readBuffer, bytes, &tmpBuffer, &outputLen, tranFoundState,&expectedMsgLen)
+				retVal, state, err := FindFullTransaction(readBuffer, bytes, &tmpBuffer, &outputLen, tranFoundState, &expectedMsgLen)
 				tranFoundState = state
 				if err != nil {
 					log.Printf("%s FindFullTransaction failed err: %s status: %s", s.name, err, state)
 					s.readCh1 <- Response{nil, err, state}
 					tranFoundState = NoData
 					outputLen = 0
-					expectedMsgLen = 0 
+					expectedMsgLen = 0
 					copy(tmpBuffer, zeroSlice) // Copy the zeroed slice into the buffer
 				} else {
 					if retVal && state == TransactionFound {
@@ -332,38 +332,38 @@ func (s Status) String() string {
 func FindFullTransactionUseASCIILen(input []byte, inputLen int, output *[]byte, outputLen *int, state Status, expectedMsgLen *int) (bool, Status, error) {
 	headerLen := Cfg.MessageLenWidth
 	headerOffset := Cfg.MessageLenOffset
-//	log.Printf("ASCIILEN - expected: %d, outputLen: %d headerLen: %d headerOffset: %d",*expectedMsgLen,*outputLen,headerLen,headerOffset)
-
+	if Cfg.DebugEnabled {
+		log.Printf("FindFullTransactionUseASCIILen before header - expected: %d, outputLen: %d headerLen: %d headerOffset: %d", *expectedMsgLen, *outputLen, headerLen, headerOffset)
+		log.Printf("ASCII input: %s", input)
+	}
 	// First pass: Process the header to determine expected message length
 	if *outputLen == 0 {
 		if inputLen < headerOffset+headerLen {
 			return false, MoreDataPending, nil // Not enough data to process header
 		}
-
 		// Extract header to determine the expected length (length of data after the header)
 		asciiHeader := input[headerOffset : headerOffset+headerLen]
 		expectedLen, err := strconv.Atoi(strings.TrimSpace(string(asciiHeader)))
 		if err != nil || expectedLen <= 0 {
 			return false, ParseError, errors.New("invalid ASCII header length")
 		}
-		*expectedMsgLen = expectedLen + headerLen + headerOffset// Add header and offset to total expected length
+		*expectedMsgLen = expectedLen + headerLen + headerOffset // Add header and offset to total expected length
 	}
-
+	if(Cfg.DebugEnabled){
+		log.Printf("FindFullTransactionUseASCIILen after header - expected: %d, outputLen: %d headerLen: %d headerOffset: %d", *expectedMsgLen, *outputLen, headerLen, headerOffset)
+	}
 	// Calculate remaining bytes needed to complete the message
 	remaining := *expectedMsgLen - *outputLen
 	if remaining <= 0 {
 		return false, ParseError, errors.New("message already complete or overflow")
 	}
-
 	// Copy the entire buffer to the output
 	bytesToCopy := inputLen
 	if bytesToCopy > remaining {
 		bytesToCopy = remaining
 	}
-
 	copy((*output)[*outputLen:], input[:bytesToCopy])
 	*outputLen += bytesToCopy
-
 	// Check if the message is complete
 	if *outputLen == *expectedMsgLen {
 		return true, TransactionFound, nil
