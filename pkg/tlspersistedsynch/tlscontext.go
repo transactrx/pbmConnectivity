@@ -347,7 +347,7 @@ func FindFullTransactionUseASCIILen(input []byte, inputLen int, output *[]byte, 
 		if err != nil || expectedLen <= 0 {
 			return false, ParseError, errors.New("invalid ASCII header length")
 		}
-		*expectedMsgLen = expectedLen + headerLen + headerOffset // Add header and offset to total expected length
+		*expectedMsgLen = expectedLen // CVS Caremark case - length includes every byte in the claim 
 	}
 	if(Cfg.DebugEnabled){
 		log.Printf("FindFullTransactionUseASCIILen after header - expected: %d, outputLen: %d headerLen: %d headerOffset: %d", *expectedMsgLen, *outputLen, headerLen, headerOffset)
