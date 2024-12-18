@@ -27,10 +27,10 @@ func main() {
 	const HEADER_CHECK_OFFSET = 19
 	const HEADER_CHECK_LEN = 20
 
-	config["pbmUrl"] = "10.0.120.250"
-	config["pbmPort"] = "20000"
-	config["pbmReceiveTimeOut"] = "60"
-	config["pbmQueueTimeOut"] = "60"
+	config["pbmUrl"] = "72.34.208.101"
+	config["pbmPort"] = "30004"
+	config["pbmReceiveTimeOut"] = "10"
+	config["pbmQueueTimeOut"] = "10"
 	config["pbmInsecureSkipVerify"] = true
 	config["pbmOutboundChnls"] = "1"
 	config["pbmActiveSites"] = "true"
@@ -40,6 +40,7 @@ func main() {
 	config["endOfRecordChar"] = "LEN"
 	config["msgLenOffset"] = strconv.Itoa(6) // zero based offset 
 	config["msgLenWidth"] = strconv.Itoa(5)  // ASCII right justified len
+	
 
 	tlsCon.Start(config)
 	header := map[string][]string{
@@ -48,7 +49,7 @@ func main() {
 
 	time.Sleep(time.Second * 2)
 
-	claim := "M00001004261011552D0B1BCTX      1076000100        20220418FAMULUS   AM04C2123456789C61C90CCTESTCDTESTAM01C419000501C52C701CATESTCBCLAIMCM123 ANY STREETCNFORT WORTHCOTXCP76102CX01CY0000000004X01AM07EM1D27418529E103D768727010001U701C800D300D5030D61D81DE20210210DF06DI00DJ4E70000540000EU0028MLAM11D90183936{DN01DQ0183936{DU0183936{AM032JDIANE2K2160 TEST ADDY2MFORT WORTH2NTX2P76107EZ01"
+	claim := "M00001004261004336D0B1BCTX      1076000100        20220418FAMULUS   AM04C2123456789C61C90CCTESTCDTESTAM01C419000501C52C701CATESTCBCLAIMCM123 ANY STREETCNFORT WORTHCOTXCP76102CX01CY0000000004X01AM07EM1D27418529E103D768727010001U701C800D300D5030D61D81DE20210210DF06DI00DJ4E70000540000EU0028MLAM11D90183936{DN01DQ0183936{DU0183936{AM032JDIANE2K2160 TEST ADDY2MFORT WORTH2NTX2P76107EZ01"
 
 	go func() {
 		response, _, err := tlsCon.Post([]byte(claim), header)
