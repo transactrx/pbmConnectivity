@@ -25,6 +25,10 @@ type Config struct {
 	HeaderCheckOffset int
 	HeaderCheckLen    int
 	EndOfRecordChar   byte
+	// Find End of Message Using ASCII Len in message 
+	MessageLenOffset int 
+	MessageLenWidth  int 
+
 }
 
 const PBM_DATA_BUFFER = 16384
@@ -146,6 +150,7 @@ func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 	tmp, ok = cfgMap["endOfRecordChar"].(string)
 
 	if ok {
+		log.Printf("tmp: %v",tmp)
 		if tmp == "EOT" {
 			Cfg.EndOfRecordChar = 0x04
 		} else if tmp == "LEN" {
@@ -156,6 +161,28 @@ func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 	} else {
 		log.Printf("Start queue time-out not Provided failed")
 	}
+	tmp, ok = cfgMap["msgLenOffset"].(string)
+
+	if ok {
+		num, err := strconv.Atoi(tmp)
+		if err == nil {
+			Cfg.MessageLenOffset = num
+		}
+	} else {
+		log.Printf("HeaderCheckLen not Provided failed")
+	}
+
+	tmp, ok = cfgMap["msgLenWidth"].(string)
+
+	if ok {
+		num, err := strconv.Atoi(tmp)
+		if err == nil {
+			Cfg.MessageLenWidth = num
+		}
+	} else {
+		log.Printf("HeaderCheckLen not Provided failed")
+	}
+
 
 	// run TlsContext
 	Ctx, err = NewTlsContext(Cfg)
