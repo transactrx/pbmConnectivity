@@ -329,46 +329,62 @@ func (s Status) String() string {
 		return "Unknown"
 	}
 }
+
 func FindFullTransactionUseASCIILen(input []byte, inputLen int, output *[]byte, outputLen *int, state Status, expectedMsgLen *int) (bool, Status, error) {
-	headerLen := Cfg.MessageLenWidth
-	headerOffset := Cfg.MessageLenOffset
-	if Cfg.DebugEnabled {
-		log.Printf("FindFullTransactionUseASCIILen before header - expected: %d, outputLen: %d headerLen: %d headerOffset: %d", *expectedMsgLen, *outputLen, headerLen, headerOffset)
-		log.Printf("ASCII input: %s", input)
-	}
-	// First pass: Process the header to determine expected message length
-	if *outputLen == 0 {
-		if inputLen < headerOffset+headerLen {
-			return false, MoreDataPending, nil // Not enough data to process header
-		}
-		// Extract header to determine the expected length (length of data after the header)
-		asciiHeader := input[headerOffset : headerOffset+headerLen]
-		expectedLen, err := strconv.Atoi(strings.TrimSpace(string(asciiHeader)))
-		if err != nil || expectedLen <= 0 {
-			return false, ParseError, errors.New("invalid ASCII header length")
-		}
-		*expectedMsgLen = expectedLen // CVS Caremark case - length includes every byte in the claim 
-	}
-	if(Cfg.DebugEnabled){
-		log.Printf("FindFullTransactionUseASCIILen after header - expected: %d, outputLen: %d headerLen: %d headerOffset: %d", *expectedMsgLen, *outputLen, headerLen, headerOffset)
-	}
-	// Calculate remaining bytes needed to complete the message
-	remaining := *expectedMsgLen - *outputLen
-	if remaining <= 0 {
-		return false, ParseError, errors.New("message already complete or overflow")
-	}
-	// Copy the entire buffer to the output
-	bytesToCopy := inputLen
-	if bytesToCopy > remaining {
-		bytesToCopy = remaining
-	}
-	copy((*output)[*outputLen:], input[:bytesToCopy])
-	*outputLen += bytesToCopy
-	// Check if the message is complete
-	if *outputLen == *expectedMsgLen {
-		return true, TransactionFound, nil
-	}
-	return false, MoreDataPending, nil
+    headerLen := Cfg.MessageLenWidth
+    headerOffset := Cfg.MessageLenOffset
+    tmpLen := *outputLen + inputLen
+
+    if Cfg.DebugEnabled {
+        log.Printf("FindFullTransactionUseASCIILen - expected: %d, outputLen: %d, headerLen: %d, headerOffset: %d, tmpLen: %d", *expectedMsgLen, *outputLen, headerLen, headerOffset, tmpLen)
+    }
+
+    // Append the input data to the output buffer
+    if tmpLen > cap(*output) {
+        return false, ParseError, errors.New("output buffer capacity exceeded")
+    }
+    copy((*output)[*outputLen:], input[:inputLen])
+    *outputLen += inputLen
+
+    // Step 1: Ensure the header is fully available
+    if *outputLen < headerOffset+headerLen {
+        if Cfg.DebugEnabled {
+            log.Printf("Not enough data for header - outputLen: %d, required: %d", *outputLen, headerOffset+headerLen)
+        }
+        return false, MoreDataPending, nil
+    }
+
+    // Step 2: Parse header to determine expected message length
+    if *expectedMsgLen == 0 {
+        asciiHeader := (*output)[headerOffset : headerOffset+headerLen]
+        expectedLen, err := strconv.Atoi(strings.TrimSpace(string(asciiHeader)))
+        if err != nil || expectedLen <= 0 {
+            return false, ParseError, errors.New("invalid ASCII header length")
+        }
+        *expectedMsgLen = expectedLen + headerOffset + headerLen // Include header in total length
+        if Cfg.DebugEnabled {
+            log.Printf("Parsed header: expectedMsgLen = %d", *expectedMsgLen)
+        }
+    }
+
+    // Step 3: Check if full message has been received
+    if *outputLen >= *expectedMsgLen {
+        if *outputLen > *expectedMsgLen {
+            return false, ParseError, errors.New("extra bytes detected beyond expected length")
+        }
+        return true, TransactionFound, nil
+    }
+
+    // Step 4: Wait for more data
+    remaining := *expectedMsgLen - *outputLen
+    if remaining > 0 {
+        if Cfg.DebugEnabled {
+            log.Printf("Waiting for more data - remaining: %d, outputLen: %d, expectedMsgLen: %d", remaining, *outputLen, *expectedMsgLen)
+        }
+        return false, MoreDataPending, nil
+    }
+
+    return false, ParseError, errors.New("unexpected condition encountered")
 }
 
 // FindFullTransaction processes input bytes and updates the output with complete transactions.
@@ -389,16 +405,8 @@ func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *
 	}
 
 	if Cfg.EndOfRecordChar == 0x00 { // TODO: write code to find end of transaction using ASCII Len
-
 		tranFound, tranStatus, err = FindFullTransactionUseASCIILen(input, inputLen, output, outputLen, state, expectedMsgLen)
 		return tranFound, tranStatus, err
-
-		// if inputLen > availableSpace {
-		// 	return false, ParseError, errors.New("input exceeds output buffer capacity")
-		// }
-		// copy((*output)[*outputLen:], input[:inputLen]) // Copy the valid portion to output
-		// *outputLen += inputLen                         // update the output len
-		// return true, TransactionFound, nil
 	} else {
 		// Determine how much input we can append
 		bytesToAppend := inputLen
