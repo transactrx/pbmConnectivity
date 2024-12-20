@@ -361,7 +361,8 @@ func FindFullTransactionUseASCIILen(input []byte, inputLen int, output *[]byte, 
         if err != nil || expectedLen <= 0 {
             return false, ParseError, errors.New("invalid ASCII header length")
         }
-        *expectedMsgLen = expectedLen + headerOffset + headerLen // Include header in total length
+        *expectedMsgLen = expectedLen //  cvs case includes full buffer 
+
         if Cfg.DebugEnabled {
             log.Printf("Parsed header: expectedMsgLen = %d", *expectedMsgLen)
         }
