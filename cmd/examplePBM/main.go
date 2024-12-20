@@ -27,7 +27,7 @@ func main() {
 	const HEADER_CHECK_OFFSET = 19
 	const HEADER_CHECK_LEN = 20
 
-	config["pbmUrl"] = "72.34.208.101"
+	config["pbmUrl"] = "10.0.120.250"
 	config["pbmPort"] = "30004"
 	config["pbmReceiveTimeOut"] = "10"
 	config["pbmQueueTimeOut"] = "10"
@@ -40,6 +40,7 @@ func main() {
 	config["endOfRecordChar"] = "LEN"
 	config["msgLenOffset"] = strconv.Itoa(6) // zero based offset 
 	config["msgLenWidth"] = strconv.Itoa(5)  // ASCII right justified len
+	config["debugEnabled"] = false
 	
 
 	tlsCon.Start(config)
