@@ -17,11 +17,21 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 	timeOut := time.Duration(float64(tmp) * float64(time.Second))
 	tid := "Unknown-TID"
 	urlOverride := ""
+	sessionLogin := "none"
+	loginData := ""
+	isSessionLoggedIn := false; 
+
 	if values, ok := header["transmissionId"]; ok && len(values) > 0 {
 		tid = values[0]
 	}
 	if values, ok := header["urlOverride"]; ok && len(values) > 0 {
 		urlOverride = values[0]
+	}
+	if values, ok := header["sessionLogin"]; ok && len(values) > 0 {
+		sessionLogin = values[0]
+	}
+	if values, ok := header["loginData"]; ok && len(values) > 0 {
+		loginData = values[0]
 	}
 	conn, err := Connect(tid, urlOverride)
 	if err != pbmlib.ErrorCode.TRX00 {
@@ -29,6 +39,15 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 		log.Printf("tlssynch.Post tid: %s Connect failed, error: '%s'", tid, err.Message)
 		return nil, nil, err
 	} else {
+		if sessionLogin == "sendLoginData" {
+			log.Printf("tlssynch.Post tid: %s sending session login data '%s'", tid, loginData)
+			isSessionLoggedIn, bytesRead, err = SubmitLoginData(loginData, tid, conn,time.Duration(5 * float64(time.Second))) 
+			// submit login Data and verify response
+			if !isSessionLoggedIn{
+				log.Printf("tlssynch.Post tid: %s sending session login data failed", tid)
+				return nil,nil,err
+			}
+		}
 		responseBuffer, bytesRead, err = SubmitRequest(string(claim), tid, conn, timeOut) // TODO read from env variables
 		if bytesRead <= 0 {
 			log.Printf("tlssynch.post tid: %s SubmitRequest failed, error: %s", tid, err.Message)
@@ -55,7 +74,7 @@ func Connect(tid string, urlOverride string) (net.Conn, pbmlib.ErrorInfo) {
 		InsecureSkipVerify: Cfg.PbmInsecureSkipVerify, // You might want to set this to false in production
 		ServerName:         url,
 	}
-	
+
 	if splitHandshake {
 
 		tlsConn, err = tls.Dial("tcp", address, tlsConfig)
@@ -136,4 +155,42 @@ func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duratio
 	responseBuffer := make([]byte, bytesRead)
 	copy(responseBuffer, buffer[:bytesRead])
 	return responseBuffer, bytesRead, pbmlib.ErrorCode.TRX00
+}
+
+
+func SubmitLoginData(loginData string, tid string, conn net.Conn, timeout time.Duration) (bool, int, pbmlib.ErrorInfo) {
+
+	retValue := false;
+	peerAddr := conn.RemoteAddr().String()
+	log.Printf("tlssynch.SubmitLoginData tid: %s data(16) %.16s time-out value: %f seconds url: %s", tid, loginData, timeout.Seconds(), peerAddr)
+	bytes, err := conn.Write([]byte(loginData))
+	if err != nil {
+		log.Printf("tlssynch.SubmitLoginData tid: %s Write data error: '%s'", tid, err)
+		return retValue, 0, pbmlib.ErrorCode.TRX10
+	} else {
+		log.Printf("tlssynch.SubmitLoginData tid: %s Write Snd %d bytes OK", tid, bytes)
+	}
+	//log.Printf("tlssynch.submitRequest tls.Write %s",string(claim))
+	//log.Printf("tlssynch.submitRequest tls.Write %v",claim)
+	// Receive and print the response from the server
+	buffer := make([]byte, PBM_DATA_BUFFER)
+	conn.SetReadDeadline(time.Now().Add(timeout))
+	bytesRead, err := conn.Read(buffer)
+	if err != nil {
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			// Handle the read timeout error
+			log.Printf("tlssynch.SubmitLoginData tid: %s Read conn.Read failed timeout error: %s", tid, err)
+			return retValue, 0, pbmlib.ErrorCode.TRX03
+		}
+		// if bytesRead > 0 { // check this case in case some good data was received
+		// 	log.Printf("tlssynch.submitRequest tid: %s Read.error raised but bytesRead > 0 error: %s bytesRead: %d", tid, err, bytesRead)
+		// } else {
+		// 	log.Printf("tlssynch.submitRequest tid: %s Read failed error: %s url: %s", tid, err, peerAddr)
+		return retValue, 0, pbmlib.ErrorCode.TRX03
+		//}
+	}
+	retValue = true
+	log.Printf("tlssynch.SubmitLoginData tid: %s Rcvd: %d bytes", tid, bytesRead)
+	
+	return retValue, bytesRead, pbmlib.ErrorCode.TRX00
 }
