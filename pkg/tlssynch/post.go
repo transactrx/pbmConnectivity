@@ -189,6 +189,7 @@ func SubmitLoginData(loginData string, tid string, conn net.Conn, timeout time.D
 		return retValue, 0, pbmlib.ErrorCode.TRX03
 		//}
 	}
+	log.Printf("tlssynch.SubmitLoginData response login data: %v",buffer)
 	retValue = true
 	log.Printf("tlssynch.SubmitLoginData tid: %s Rcvd: %d bytes", tid, bytesRead)
 	
