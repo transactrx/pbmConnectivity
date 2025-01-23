@@ -40,7 +40,7 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 		return nil, nil, err
 	} else {
 		if sessionLogin == "sendLoginData" {
-			log.Printf("tlssynch.Post tid: %s sending session login data '%s'", tid, loginData)
+			log.Printf("tlssynch.Post tid: %s sending session login data len: %d", tid,len(loginData))
 			isSessionLoggedIn, bytesRead, err = SubmitLoginData(loginData, tid, conn,time.Duration(5 * float64(time.Second))) 
 			// submit login Data and verify response
 			if !isSessionLoggedIn{
