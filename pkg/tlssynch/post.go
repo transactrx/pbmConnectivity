@@ -162,7 +162,7 @@ func SubmitLoginData(loginData string, tid string, conn net.Conn, timeout time.D
 
 	retValue := false;
 	peerAddr := conn.RemoteAddr().String()
-	log.Printf("tlssynch.SubmitLoginData tid: %s data(16) %.16s time-out value: %f seconds url: %s", tid, loginData, timeout.Seconds(), peerAddr)
+	log.Printf("tlssynch.SubmitLoginData tid: %s data(16) %.16X time-out value: %f seconds url: %s", tid, loginData, timeout.Seconds(), peerAddr)
 	bytes, err := conn.Write([]byte(loginData))
 	if err != nil {
 		log.Printf("tlssynch.SubmitLoginData tid: %s Write data error: '%s'", tid, err)
@@ -170,28 +170,18 @@ func SubmitLoginData(loginData string, tid string, conn net.Conn, timeout time.D
 	} else {
 		log.Printf("tlssynch.SubmitLoginData tid: %s Write Snd %d bytes OK", tid, bytes)
 	}
-	//log.Printf("tlssynch.submitRequest tls.Write %s",string(claim))
-	//log.Printf("tlssynch.submitRequest tls.Write %v",claim)
-	// Receive and print the response from the server
 	buffer := make([]byte, PBM_DATA_BUFFER)
 	conn.SetReadDeadline(time.Now().Add(timeout))
 	bytesRead, err := conn.Read(buffer)
 	if err != nil {
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			// Handle the read timeout error
 			log.Printf("tlssynch.SubmitLoginData tid: %s Read conn.Read failed timeout error: %s", tid, err)
 			return retValue, 0, pbmlib.ErrorCode.TRX03
 		}
-		// if bytesRead > 0 { // check this case in case some good data was received
-		// 	log.Printf("tlssynch.submitRequest tid: %s Read.error raised but bytesRead > 0 error: %s bytesRead: %d", tid, err, bytesRead)
-		// } else {
-		// 	log.Printf("tlssynch.submitRequest tid: %s Read failed error: %s url: %s", tid, err, peerAddr)
 		return retValue, 0, pbmlib.ErrorCode.TRX03
-		//}
 	}
-	//log.Printf("tlssynch.SubmitLoginData response login data: %v",buffer)
 	retValue = true
-	log.Printf("tlssynch.SubmitLoginData tid: %s Rcvd: %d bytes", tid, bytesRead)
+	log.Printf("tlssynch.SubmitLoginData tid: %s Rcvd: %d bytes data(16) %.16X", tid, bytesRead,buffer)
 	
 	return retValue, bytesRead, pbmlib.ErrorCode.TRX00
 }
