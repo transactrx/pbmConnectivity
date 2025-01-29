@@ -30,6 +30,8 @@ type Config struct {
 	MessageLenOffset int 
 	MessageLenWidth  int 
 	DebugEnabled bool
+	MessageLenType int 	// 0 - default - includes header itself 
+						// 1 - skipheader - excludes header 
 }
 
 const PBM_DATA_BUFFER = 16384
@@ -160,7 +162,7 @@ func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 			Cfg.EndOfRecordChar = 0x03
 		}
 	} else {
-		log.Printf("Start queue time-out not Provided failed")
+		log.Printf("endOfRecordChar not Provided failed")
 	}
 	tmp, ok = cfgMap["msgLenOffset"].(string)
 
@@ -170,7 +172,7 @@ func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 			Cfg.MessageLenOffset = num
 		}
 	} else {
-		log.Printf("HeaderCheckLen not Provided failed")
+		log.Printf("msgLenOffset not Provided failed")
 	}
 
 	tmp, ok = cfgMap["msgLenWidth"].(string)
@@ -181,7 +183,7 @@ func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 			Cfg.MessageLenWidth = num
 		}
 	} else {
-		log.Printf("HeaderCheckLen not Provided failed")
+		log.Printf("msgLenWidth not Provided failed")
 	}
 
 	tmpBool, ok1 = cfgMap["debugEnabled"].(bool)
@@ -189,9 +191,23 @@ func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 	if ok1 {
 		Cfg.DebugEnabled= tmpBool
 	} else {
-		log.Printf("HeaderCheck not Provided failed")
+		log.Printf("debugEnabled not Provided failed")
 		Cfg.DebugEnabled = false
 	}
+
+	tmp, ok = cfgMap["messageLenType"].(string)
+
+	if ok {
+		Cfg.MessageLenType = 0
+		log.Printf("tmp: %v",tmp)
+		if tmp == "INCLUDELEN" {
+			Cfg.MessageLenType = 0
+		} else if tmp == "EXCLUDELEN" {
+			Cfg.MessageLenType = 1			
+		} 
+	} else {
+		log.Printf("messageLenType not Provided failed")
+	}	
 
 	PrintStructFieldsAndValues(Cfg)
 	
