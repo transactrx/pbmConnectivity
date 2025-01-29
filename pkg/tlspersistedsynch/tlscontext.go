@@ -364,7 +364,7 @@ func FindFullTransactionUseASCIILen(input []byte, inputLen int, output *[]byte, 
 		if(Cfg.MessageLenType == 0 ){
 			*expectedMsgLen = expectedLen //  cvs case includes full buffer 
 		}else if(Cfg.MessageLenType == 1){
-			*expectedMsgLen = expectedLen - headerLen //  optumrxsolutions excludes header 
+			*expectedMsgLen = expectedLen + headerLen //  optumrxsolutions excludes header so need to add to incoming
 		}
 
         if Cfg.DebugEnabled {
