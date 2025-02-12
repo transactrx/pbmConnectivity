@@ -32,6 +32,7 @@ type Config struct {
 	DebugEnabled bool
 	MessageLenType int 	// 0 - default - includes header itself 
 						// 1 - skipheader - excludes header 
+	DisconnectFailedCount int 						
 }
 
 const PBM_DATA_BUFFER = 16384
@@ -208,6 +209,18 @@ func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 	} else {
 		log.Printf("messageLenType not Provided failed")
 	}	
+
+	tmp, ok = cfgMap["DisconnectFailedCount"].(string)
+
+	Cfg.DisconnectFailedCount = 10 // 10 failure disconnect default value 
+	if ok {
+		num, err := strconv.Atoi(tmp)
+		if err == nil {
+			Cfg.DisconnectFailedCount = num
+		}
+	} else {
+		log.Printf("DisconnectFailedCount not Provided failed")
+	}
 
 	PrintStructFieldsAndValues(Cfg)
 	
