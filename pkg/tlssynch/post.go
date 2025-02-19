@@ -68,7 +68,7 @@ func Connect(tid string, urlOverride string) (net.Conn, pbmlib.ErrorInfo) {
 		url = urlOverride
 	}
 	address := url + ":" + Cfg.PbmPort
-	log.Printf("tlssynch.connect tid: %s connecting to '%s' Pbm Certificate Insecure Skip Verify: %t splittls: %t", tid, address, Cfg.PbmInsecureSkipVerify,splitHandshake)
+	log.Printf("tlssynch.connect tid: %s connecting to '%s' Pbm Certificate Insecure Skip Verify: %t splittls: %t", tid, address, Cfg.PbmInsecureSkipVerify, splitHandshake)
 	// Create a TLS configuration
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: Cfg.PbmInsecureSkipVerify, // You might want to set this to false in production
@@ -101,12 +101,14 @@ func Connect(tid string, urlOverride string) (net.Conn, pbmlib.ErrorInfo) {
 			return nil, pbmlib.ErrorCode.TRX03
 		}
 	} else {
-
+		start := time.Now() // Capture the start time
 		tlsConn, err = tls.Dial("tcp", address, tlsConfig)
 		if err != nil {
 			log.Printf("tlssynch.connect tid: %s failed, error: '%s'", tid, err)
 			return nil, pbmlib.ErrorCode.TRX02
 		}
+		elapsed := time.Since(start) // Calculate elapsed time
+		log.Printf("tlssynch.connect tls handshake duration: %v", tid,elapsed)
 	}
 	return tlsConn, pbmlib.ErrorCode.TRX00
 }
