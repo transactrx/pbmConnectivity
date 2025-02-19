@@ -6,12 +6,15 @@ type TLSSyncConnect struct {
 	test string
 }
 type Config struct {
-	PbmUrl            string
-	PbmPort           string
-	PbmReceiveTimeOut string
+	PbmUrl                string
+	PbmPort               string
+	PbmReceiveTimeOut     string
 	PbmInsecureSkipVerify bool
+	TlsSplitHandshake     bool
 }
+
 const PBM_DATA_BUFFER = 16384
+
 var Cfg Config
 
 func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
@@ -45,6 +48,14 @@ func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
 	} else {
 		log.Printf("PbmInsecureSkipVerify not Provided failed")
 		Cfg.PbmInsecureSkipVerify = false
+	}
+
+	tmpBool, ok = cfgMap["TlsSplitHandshake"].(bool)
+	Cfg.TlsSplitHandshake =true
+	if ok1 {
+		Cfg.TlsSplitHandshake = tmpBool
+	} else {
+		log.Printf("TlsSplitHandshake not Provided - default to true")	
 	}
 	return nil
 }

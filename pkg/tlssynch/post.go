@@ -19,7 +19,7 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 	urlOverride := ""
 	sessionLogin := "none"
 	loginData := ""
-	isSessionLoggedIn := false; 
+	isSessionLoggedIn := false
 
 	if values, ok := header["transmissionId"]; ok && len(values) > 0 {
 		tid = values[0]
@@ -40,12 +40,12 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 		return nil, nil, err
 	} else {
 		if sessionLogin == "sendLoginData" {
-			log.Printf("tlssynch.Post tid: %s sending session login data len: %d", tid,len(loginData))
-			isSessionLoggedIn, bytesRead, err = SubmitLoginData(loginData, tid, conn,time.Duration(5 * float64(time.Second))) 
+			log.Printf("tlssynch.Post tid: %s sending session login data len: %d", tid, len(loginData))
+			isSessionLoggedIn, bytesRead, err = SubmitLoginData(loginData, tid, conn, time.Duration(5*float64(time.Second)))
 			// submit login Data and verify response
-			if !isSessionLoggedIn{
+			if !isSessionLoggedIn {
 				log.Printf("tlssynch.Post tid: %s sending session login data failed", tid)
-				return nil,nil,err
+				return nil, nil, err
 			}
 		}
 		responseBuffer, bytesRead, err = SubmitRequest(string(claim), tid, conn, timeOut) // TODO read from env variables
@@ -62,13 +62,13 @@ func Connect(tid string, urlOverride string) (net.Conn, pbmlib.ErrorInfo) {
 
 	url := Cfg.PbmUrl
 	var tlsConn *tls.Conn
-	splitHandshake := false
+	splitHandshake := Cfg.TlsSplitHandshake
 	var err error
 	if len(urlOverride) > 0 {
 		url = urlOverride
 	}
 	address := url + ":" + Cfg.PbmPort
-	log.Printf("tlssynch.connect tid: %s connecting to '%s' Pbm Certificate Insecure Skip Verify: %t", tid, address, Cfg.PbmInsecureSkipVerify)
+	log.Printf("tlssynch.connect tid: %s connecting to '%s' Pbm Certificate Insecure Skip Verify: %t splittls: %t", tid, address, Cfg.PbmInsecureSkipVerify,splitHandshake)
 	// Create a TLS configuration
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: Cfg.PbmInsecureSkipVerify, // You might want to set this to false in production
@@ -76,14 +76,6 @@ func Connect(tid string, urlOverride string) (net.Conn, pbmlib.ErrorInfo) {
 	}
 
 	if splitHandshake {
-
-		tlsConn, err = tls.Dial("tcp", address, tlsConfig)
-		if err != nil {
-			log.Printf("tlssynch.connect tid: %s failed, error: '%s'", tid, err)
-			return nil, pbmlib.ErrorCode.TRX02
-		}
-
-	} else {
 
 		// Create a timeout for the connection attempt
 		timeout := 5 * time.Second // Adjust the timeout duration as needed
@@ -107,6 +99,13 @@ func Connect(tid string, urlOverride string) (net.Conn, pbmlib.ErrorInfo) {
 				conn.Close()
 			}
 			return nil, pbmlib.ErrorCode.TRX03
+		}
+	} else {
+
+		tlsConn, err = tls.Dial("tcp", address, tlsConfig)
+		if err != nil {
+			log.Printf("tlssynch.connect tid: %s failed, error: '%s'", tid, err)
+			return nil, pbmlib.ErrorCode.TRX02
 		}
 	}
 	return tlsConn, pbmlib.ErrorCode.TRX00
@@ -157,10 +156,9 @@ func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duratio
 	return responseBuffer, bytesRead, pbmlib.ErrorCode.TRX00
 }
 
-
 func SubmitLoginData(loginData string, tid string, conn net.Conn, timeout time.Duration) (bool, int, pbmlib.ErrorInfo) {
 
-	retValue := false;
+	retValue := false
 	peerAddr := conn.RemoteAddr().String()
 	log.Printf("tlssynch.SubmitLoginData tid: %s data(16) %.16X time-out value: %f seconds url: %s", tid, loginData, timeout.Seconds(), peerAddr)
 	bytes, err := conn.Write([]byte(loginData))
@@ -181,7 +179,7 @@ func SubmitLoginData(loginData string, tid string, conn net.Conn, timeout time.D
 		return retValue, 0, pbmlib.ErrorCode.TRX03
 	}
 	retValue = true
-	log.Printf("tlssynch.SubmitLoginData tid: %s Rcvd: %d bytes data(16) %.16X", tid, bytesRead,buffer)
-	
+	log.Printf("tlssynch.SubmitLoginData tid: %s Rcvd: %d bytes data(16) %.16X", tid, bytesRead, buffer)
+
 	return retValue, bytesRead, pbmlib.ErrorCode.TRX00
 }
