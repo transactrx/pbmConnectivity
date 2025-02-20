@@ -108,7 +108,7 @@ func Connect(tid string, urlOverride string) (net.Conn, pbmlib.ErrorInfo) {
 			return nil, pbmlib.ErrorCode.TRX02
 		}
 		elapsed := time.Since(start) // Calculate elapsed time
-		log.Printf("tlssynch.connect   tid: %s tls handshake duration: %v", tid,elapsed)
+		log.Printf("tlssynch.connect   tid: %s tls handshake duration: %d ms url: %s", tid,elapsed.Milliseconds(),address)
 	}
 	return tlsConn, pbmlib.ErrorCode.TRX00
 }
