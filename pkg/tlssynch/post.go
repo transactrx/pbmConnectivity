@@ -75,6 +75,7 @@ func Connect(tid string, urlOverride string) (net.Conn, pbmlib.ErrorInfo) {
 		ServerName:         url,
 	}
 
+	start := time.Now() // Capture the start time
 	if splitHandshake {
 
 		// Create a timeout for the connection attempt
@@ -87,7 +88,7 @@ func Connect(tid string, urlOverride string) (net.Conn, pbmlib.ErrorInfo) {
 			return nil, pbmlib.ErrorCode.TRX02
 			//return nil,models.ErrorMap
 		} else {
-			log.Printf("tlssynch.connect tid: %s connected to '%s' SUCCESS", tid, address)
+			//log.Printf("tlssynch.connect tid: %s connected to '%s' SUCCESS", tid, address)
 		}
 		// Upgrade the connection to TLS
 		tlsConn = tls.Client(conn, tlsConfig)
@@ -99,17 +100,19 @@ func Connect(tid string, urlOverride string) (net.Conn, pbmlib.ErrorInfo) {
 				conn.Close()
 			}
 			return nil, pbmlib.ErrorCode.TRX03
-		}
+		}		
 	} else {
-		start := time.Now() // Capture the start time
+		
 		tlsConn, err = tls.Dial("tcp", address, tlsConfig)
 		if err != nil {
 			log.Printf("tlssynch.connect tid: %s failed, error: '%s'", tid, err)
 			return nil, pbmlib.ErrorCode.TRX02
 		}
-		elapsed := time.Since(start) // Calculate elapsed time
-		log.Printf("tlssynch.connect   tid: %s tls handshake duration: %d ms url: %s", tid,elapsed.Milliseconds(),address)
+		
 	}
+	elapsed := time.Since(start) // Calculate elapsed time
+	log.Printf("tlssynch.connect tid: %s ok tls handshake duration: %d ms url: %s", tid, elapsed.Milliseconds(),address)
+	//log.Printf("tlssynch.connect tid: %s tls handshake duration: %d ms url: %s", tid,elapsed.Milliseconds(),address)
 	return tlsConn, pbmlib.ErrorCode.TRX00
 }
 
