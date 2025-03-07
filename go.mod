@@ -2,14 +2,19 @@ module github.com/transactrx/pbmConnectivity
 
 go 1.22.0
 
-require github.com/transactrx/ncpdpDestination v0.0.20
+require (
+	github.com/transactrx/ncpdpDestination v0.0.20
+	github.com/valyala/fasthttp v1.59.0
+)
 
 require (
+	github.com/andybalholm/brotli v1.1.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/klauspost/compress v1.17.9 // indirect
+	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/nats-io/nats.go v1.36.0 // indirect
 	github.com/nats-io/nkeys v0.4.7 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
-	golang.org/x/crypto v0.24.0 // indirect
-	golang.org/x/sys v0.21.0 // indirect
+	github.com/valyala/bytebufferpool v1.0.0 // indirect
+	golang.org/x/crypto v0.33.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
 )
