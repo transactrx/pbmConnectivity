@@ -80,8 +80,14 @@ func (pc *HTTPPBMConnect) Start(cfgMap map[string]interface{}) error {
 	} else {
 		log.Printf("TlsSplitHandshake not Provided - default to true")	
 	}
-
-	Cfg.IsDebugMode = true
+	tmpBool, ok1 = cfgMap["debugEnabled"].(bool)
+	if ok1 {
+		Cfg.IsDebugMode= tmpBool
+	} else {
+		log.Printf("debugEnabled not Provided failed")
+		Cfg.IsDebugMode = false
+	}
+//	Cfg.IsDebugMode = true
 	CreateGlobalHttpContext()
 
 	return nil
