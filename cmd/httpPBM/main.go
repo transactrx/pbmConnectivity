@@ -33,7 +33,7 @@ func main() {
 	config["endOfRecordChar"] = "LEN"
 	config["msgLenOffset"] = strconv.Itoa(6) // zero based offset
 	config["msgLenWidth"] = strconv.Itoa(5)  // ASCII right justified len
-	config["debugEnabled"] = false
+	config["debugEnabled"] = true
 
 	routeInfo := https.RouteInfo{
 		RouteCode: "301",
