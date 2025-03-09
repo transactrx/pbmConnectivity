@@ -33,7 +33,7 @@ func MapHTTPStatusToTRXCode(httpCode int) (pbmlib.ErrorInfo, bool) {
 	case httpCode >= 400 && httpCode < 500:
 		return pbmlib.ErrorCode.TRX04, isError
 	case httpCode >= 500 && httpCode < 600:
-		return pbmlib.ErrorCode.TRX02, isError
+		return pbmlib.ErrorCode.TRX07, isError
 	default:
 		return pbmlib.ErrorCode.TRX9999, isError
 	}
