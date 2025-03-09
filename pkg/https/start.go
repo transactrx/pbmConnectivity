@@ -84,7 +84,7 @@ func (pc *HTTPPBMConnect) Start(cfgMap map[string]interface{}) error {
 	if ok1 {
 		Cfg.IsDebugMode= tmpBool
 	} else {
-		log.Printf("debugEnabled not Provided failed")
+		log.Printf("debugEnabled not Provided failed...")
 		Cfg.IsDebugMode = false
 	}
 //	Cfg.IsDebugMode = true
