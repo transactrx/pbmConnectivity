@@ -515,7 +515,7 @@ func (s *TlsSession) ProcessResponseWorker() {
 					}
 					tidStr, ok := tid.(string)
 					if !ok {
-						log.Println("%s Invalid transaction ID type",s.name)
+						log.Printf("%s Invalid transaction ID type",s.name)
 						continue
 					}
 
@@ -528,7 +528,7 @@ func (s *TlsSession) ProcessResponseWorker() {
 
 					chTyped, ok := ch.(chan Response)
 					if !ok {
-						log.Println("%s Invalid response channel type",s.name)
+						log.Printf("%s Invalid response channel type",s.name)
 						continue
 					}
 
@@ -537,7 +537,7 @@ func (s *TlsSession) ProcessResponseWorker() {
 					case chTyped <- response:
 						log.Printf("%s response sent to waiting goroutine for tid: %s",s.name,tidStr)
 					default:
-						log.Println("%s No receiver available, dropping response",s.name)
+						log.Printf("%s No receiver available, dropping response",s.name)
 					}
 				}
 			} else {
