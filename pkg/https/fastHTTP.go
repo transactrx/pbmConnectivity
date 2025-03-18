@@ -40,6 +40,9 @@ func FastPost(body []byte, conf RouteInfo) (string, int, error) {
 	var err error
 	for _, header := range conf.Headers {
 		readyHeader := header.Value
+		if(Cfg.IsDebugMode){
+			log.Printf("Fastpost Header  %s: %s prefix: '%s' Base64encode: %t",header.Key,readyHeader,header.Prefix,header.Base64encode)
+		}
 		if header.Base64encode {
 			readyHeader, err = encodeAuthorization(header.Value, header.Prefix)
 			if err != nil {
