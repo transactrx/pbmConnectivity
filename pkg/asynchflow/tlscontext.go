@@ -291,8 +291,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					n, err := s.tlsConn.Write(data[total:])
 					if err != nil {
 						log.Printf("%s Write failed: %s", s.name, err)
-						s.setConnected(false)
-						return
+						s.setConnected(false)						
 					}
 					total += n
 				}
@@ -306,7 +305,6 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				log.Printf("%s closing connection...", s.name)
 				s.tlsConn.Close()
 			}
-			return
 		}
 	}
 }
@@ -496,14 +494,12 @@ func (s *TlsSession) ProcessResponseWorker() {
 		case response := <-s.readCh1:
 			log.Printf("%s %d bytes received status: %s err: %v", s.name, len(response.data), response.status, response.err)
 			if response.status != ParseError {
-				validResponse, requestHeader := IsValidResponse(response.data, "")
-				if !validResponse {
-					//return nil, errors.New("Mismatch request/response")
-				} else {
+				responseHeader := GetHeader(response.data)
+				if len(responseHeader) > 0 {
 					// Load and delete the transaction ID from responsePbmHeader
-					tid, ok := responsePbmHeader.LoadAndDelete(requestHeader)
+					tid, ok := responsePbmHeader.LoadAndDelete(responseHeader)
 					if !ok {
-						log.Printf("%s Transaction ID not found for request header: %s", s.name, requestHeader)
+						log.Printf("%s Transaction ID not found for request header: %s", s.name, responseHeader)
 						continue
 					}
 					tidStr, ok := tid.(string)
@@ -542,27 +538,18 @@ func (s *TlsSession) ProcessResponseWorker() {
 
 }
 
-// func (s *TlsSession) Read(appCtx context.Context, index int, requestHeader string) ([]byte, error) {
+func GetHeader(response []byte) (string) {
 
-// 	select {
-// 	case response := <-s.readCh1:
-// 		log.Printf("%s %d bytes received status: %s err: %v", s.name, len(response.data), response.status, response.err)
-// 		if response.status != ParseError {
-// 			validResponse := IsValidResponse(response.data, requestHeader)
-// 			if !validResponse {
-// 				return nil, errors.New("Mismatch request/response")
-// 			} else {
-// 				return response.data, nil
-// 			}
-// 		} else {
-// 			return nil, errors.New("Parse error")
-// 		}
-
-// 	case <-appCtx.Done():
-// 		//ctx.IncrementError(index)
-// 		return nil, appCtx.Err() // Return the context error, typically context.DeadlineExceeded
-// 	}
-// }
+	var responseHeader []byte 
+	if len(response) > Cfg.HeaderCheckOffset+Cfg.HeaderCheckLen {
+		responseHeader = make([]byte, Cfg.HeaderCheckLen)
+		copy(responseHeader, response[Cfg.HeaderCheckOffset:Cfg.HeaderCheckOffset+Cfg.HeaderCheckLen])
+		if Cfg.DebugEnabled {
+			log.Printf("Response header: %s offset: %d len: %d ", string(responseHeader), Cfg.HeaderCheckOffset, Cfg.HeaderCheckLen)
+		}
+	}
+	return string(responseHeader)
+}
 
 // MRG 9/23/24 compare response header vs request header
 // true - valid response

@@ -78,7 +78,7 @@ func encodeAuthorization(auth, prefix string) (string, error) {
 	if strings.HasPrefix(auth, prefix) {
 		parts := strings.SplitN(auth, " ", 2) // Use SplitN to ensure splitting into two parts: "Bearer" and token
 		if len(parts) != 2 || parts[0] != prefix {
-			log.Println("Invalid APIKey format")
+			log.Printf("Invalid APIKey format")
 			return "", fmt.Errorf("invalid API Key format")
 		}
 		stringToEncode = parts[1]
