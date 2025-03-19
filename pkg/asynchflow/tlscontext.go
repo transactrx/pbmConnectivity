@@ -17,7 +17,14 @@ import (
 	"sync"
 	"time"
 )
+type Status int
 
+const (
+	NoData           Status = iota // Indicates that there is no data yet
+	MoreDataPending                // More data is needed
+	TransactionFound               // A full transaction has been found
+	ParseError                     // Indicates a parsing error
+)
 type Site struct {
 	URL    string
 	Active bool
@@ -28,6 +35,8 @@ type Response struct {
 	err    error
 	status Status
 }
+
+const CLAIM_QUEUE_LEN = 100
 
 // TlsSession represents a single TLS session.
 type TlsSession struct {
@@ -124,8 +133,6 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 		InsecureSkipVerify: appCfg.PbmInsecureSkipVerify, // You might want to set this to false in production
 	}
 
-	
-
 	// Assign sessions to sites
 	for i := 0; i < appCfg.PbmOutboundChnls; i++ {
 		site := ctx.sites[i%len(ctx.sites)] // Round-robin assignment of sites
@@ -135,8 +142,8 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 			name:      createSessionName(i, site.URL),
 			address:   addr,
 			readCh:    make(chan []byte),
-			readCh1:   make(chan Response),
-			writeCh:   make(chan []byte),
+			readCh1:   make(chan Response, CLAIM_QUEUE_LEN),
+			writeCh:   make(chan []byte, CLAIM_QUEUE_LEN),
 			closeCh:   make(chan bool),
 			connected: false,
 			tlsConfig: tlsConfig,
@@ -145,7 +152,7 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 		}
 		ctx.sessions[i] = session
 		go session.handleConnection(ctx) // Pass ctx to handleConnection
-		go session.ProcessResponseWorker()		
+		go session.ProcessResponseWorker()
 	}
 
 	// Start monitoring with a threshold of 5 errors and a check interval of 10 seconds
@@ -276,47 +283,31 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 	}()
 
 	for {
-
 		select {
 		case data := <-s.writeCh:
 			if s.IsConnected() && s.tlsConn != nil {
-				bytes, err := s.tlsConn.Write(data)
-				if err != nil {
-					log.Printf("%s Write failed: %s", s.name, err)
-					s.setConnected(false)
-					continue
-				} else {
-					log.Printf("%s Snd %d bytes", s.name, bytes)
+				total := 0
+				for total < len(data) {
+					n, err := s.tlsConn.Write(data[total:])
+					if err != nil {
+						log.Printf("%s Write failed: %s", s.name, err)
+						s.setConnected(false)						
+					}
+					total += n
 				}
+				log.Printf("%s Snd %d bytes", s.name, total)
 			} else {
-				log.Printf("%s Write failed connection object is nil", s.name)
+				log.Printf("%s Write failed: connection is nil/not connected", s.name)
 			}
 
 		case <-s.closeCh:
-
 			if s.tlsConn != nil {
 				log.Printf("%s closing connection...", s.name)
 				s.tlsConn.Close()
-			} else {
-				log.Printf("%s s.conn.close - conn was null", s.name)
 			}
-
-			return
-		default:
-			// Optional: Add a short sleep to prevent busy waiting in the select loop
-			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
-
-type Status int
-
-const (
-	NoData           Status = iota // Indicates that there is no data yet
-	MoreDataPending                // More data is needed
-	TransactionFound               // A full transaction has been found
-	ParseError                     // Indicates a parsing error
-)
 
 // Implement the String() method for the Status type
 func (s Status) String() string {
@@ -372,7 +363,7 @@ func FindFullTransactionUseASCIILen(input []byte, inputLen int, output *[]byte, 
 		}
 
 		if Cfg.DebugEnabled {
-			log.Printf("Parsed header: expectedMsgLen = %d outputLen: %d", *expectedMsgLen,*outputLen)
+			log.Printf("Parsed header: expectedMsgLen = %d outputLen: %d", *expectedMsgLen, *outputLen)
 		}
 	}
 
@@ -502,42 +493,40 @@ func (s *TlsSession) ProcessResponseWorker() {
 		select {
 		case response := <-s.readCh1:
 			log.Printf("%s %d bytes received status: %s err: %v", s.name, len(response.data), response.status, response.err)
-			if response.status != ParseError {				
-				validResponse,requestHeader := IsValidResponse(response.data,"")
-				if !validResponse {
-					//return nil, errors.New("Mismatch request/response")
-				} else {
+			if response.status != ParseError {
+				responseHeader := GetHeader(response.data)
+				if len(responseHeader) > 0 {
 					// Load and delete the transaction ID from responsePbmHeader
-					tid, ok := responsePbmHeader.LoadAndDelete(requestHeader)
+					tid, ok := responsePbmHeader.LoadAndDelete(responseHeader)
 					if !ok {
-						log.Printf("%s Transaction ID not found for request header: %s",s.name, requestHeader)
+						log.Printf("%s Transaction ID not found for request header: %s", s.name, responseHeader)
 						continue
 					}
 					tidStr, ok := tid.(string)
 					if !ok {
-						log.Printf("%s Invalid transaction ID type",s.name)
+						log.Printf("%s Invalid transaction ID type", s.name)
 						continue
 					}
 
 					// Load and delete the response channel
 					ch, ok := responseChans.LoadAndDelete(tidStr)
 					if !ok {
-						log.Printf("%s Response channel not found for transaction ID: %s",s.name,tidStr)
+						log.Printf("%s Response channel not found for transaction ID: %s", s.name, tidStr)
 						continue
 					}
 
 					chTyped, ok := ch.(chan Response)
 					if !ok {
-						log.Printf("%s Invalid response channel type",s.name)
+						log.Printf("%s Invalid response channel type", s.name)
 						continue
 					}
 
 					// Send response safely (avoid deadlock)
 					select {
 					case chTyped <- response:
-						log.Printf("%s response sent to waiting goroutine for tid: %s",s.name,tidStr)
+						log.Printf("%s response sent to waiting goroutine for tid: %s", s.name, tidStr)
 					default:
-						log.Printf("%s No receiver available, dropping response",s.name)
+						log.Printf("%s No receiver available, dropping response", s.name)
 					}
 				}
 			} else {
@@ -549,32 +538,23 @@ func (s *TlsSession) ProcessResponseWorker() {
 
 }
 
-// func (s *TlsSession) Read(appCtx context.Context, index int, requestHeader string) ([]byte, error) {
+func GetHeader(response []byte) (string) {
 
-// 	select {
-// 	case response := <-s.readCh1:
-// 		log.Printf("%s %d bytes received status: %s err: %v", s.name, len(response.data), response.status, response.err)
-// 		if response.status != ParseError {
-// 			validResponse := IsValidResponse(response.data, requestHeader)
-// 			if !validResponse {
-// 				return nil, errors.New("Mismatch request/response")
-// 			} else {
-// 				return response.data, nil
-// 			}
-// 		} else {
-// 			return nil, errors.New("Parse error")
-// 		}
-
-// 	case <-appCtx.Done():
-// 		//ctx.IncrementError(index)
-// 		return nil, appCtx.Err() // Return the context error, typically context.DeadlineExceeded
-// 	}
-// }
+	var responseHeader []byte 
+	if len(response) > Cfg.HeaderCheckOffset+Cfg.HeaderCheckLen {
+		responseHeader = make([]byte, Cfg.HeaderCheckLen)
+		copy(responseHeader, response[Cfg.HeaderCheckOffset:Cfg.HeaderCheckOffset+Cfg.HeaderCheckLen])
+		if Cfg.DebugEnabled {
+			log.Printf("Response header: %s offset: %d len: %d ", string(responseHeader), Cfg.HeaderCheckOffset, Cfg.HeaderCheckLen)
+		}
+	}
+	return string(responseHeader)
+}
 
 // MRG 9/23/24 compare response header vs request header
 // true - valid response
 // false -- issue with incoming header (potential swapped responses)
-func IsValidResponse(response []byte, requestHeader string) (bool,string) {
+func IsValidResponse(response []byte, requestHeader string) (bool, string) {
 
 	//log.Printf("PBM response data(ALL) '%s'", string(response))
 	result := false
@@ -589,9 +569,9 @@ func IsValidResponse(response []byte, requestHeader string) (bool,string) {
 		// Compare response hdr vs claim header
 		reqHdrString := fmt.Sprintf("%-*s", Cfg.HeaderCheckLen, requestHeader)
 		if Cfg.DebugEnabled {
-			log.Printf("Response header: %s offset: %d len: %d ",string(responseHeader),Cfg.HeaderCheckOffset,Cfg.HeaderCheckLen)
+			log.Printf("Response header: %s offset: %d len: %d ", string(responseHeader), Cfg.HeaderCheckOffset, Cfg.HeaderCheckLen)
 		}
-		respHeader = string(responseHeader	)
+		respHeader = string(responseHeader)
 		if string(responseHeader) == reqHdrString {
 			result = true
 		} else {
@@ -599,7 +579,7 @@ func IsValidResponse(response []byte, requestHeader string) (bool,string) {
 			result = true
 		}
 	}
-	return result,respHeader
+	return result, respHeader
 }
 
 // Write sends data through a connection.

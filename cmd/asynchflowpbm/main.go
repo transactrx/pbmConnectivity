@@ -38,7 +38,7 @@ func main() {
 	config["endOfRecordChar"] = "LEN"
 	config["msgLenOffset"] = strconv.Itoa(6) // zero based offset 
 	config["msgLenWidth"] = strconv.Itoa(5)  // ASCII right justified len
-	config["debugEnabled"] = true
+	config["debugEnabled"] = false
 	config["MessageLenType"] = 0
 	
 

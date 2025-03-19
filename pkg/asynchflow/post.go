@@ -1,15 +1,15 @@
 package asynchflow
 
 import (
+	"github.com/transactrx/ncpdpDestination/pkg/pbmlib"
 	"log"
 	"strconv"
 	"sync"
 	"time"
-	"github.com/transactrx/ncpdpDestination/pkg/pbmlib"
 )
 
-var responseChans sync.Map       // tid vs responsechnl 
-var responsePbmHeader sync.Map  // headertoPBM vs tid 
+var responseChans sync.Map     // tid vs responsechnl
+var responsePbmHeader sync.Map // headertoPBM vs tid
 
 type Claim struct {
 	Tid    string
@@ -32,29 +32,32 @@ func (pc *AsynchFlow) Post(claim []byte, header map[string][]string) ([]byte, ma
 	session, index, err := Ctx.FindConnection()
 	if err != nil || index == -1 {
 		log.Printf("asynch.post tid: %s no channel found", tid)
-		return nil, nil, pbmlib.ErrorCode.TRX08 
+		return nil, nil, pbmlib.ErrorCode.TRX08
 	}
 	log.Printf("asynch.post[%d]  tid: %s", index, tid)
 	respCh := make(chan Response, 1) // Buffered to avoid goroutine leaks
 	responseChans.Store(tid, respCh)
-	defer responseChans.Delete(tid)	
-	responsePbmHeader.Store(requestHeader,tid)
+	defer responseChans.Delete(tid)
+	responsePbmHeader.Store(requestHeader, tid)
 	defer responsePbmHeader.Delete(requestHeader)
-	
+
 	err = session.Write(index, claim)
 	if err != nil {
 		log.Printf("asynch.post[%d]  tid: %s write failed", index, tid)
 		return nil, nil, pbmlib.ErrorCode.TRX10
 	}
 	var resp Response
+	chnlTimeOut := time.Duration(readTimeOut * int(time.Second))
 	// Wait for response with timeout
 	select {
 	case resp = <-respCh:
-		log.Printf("Received response: %s", resp.status)
-	case <-time.After(5 * time.Second):
-		log.Println("Timed out waiting for response")
+		log.Printf("asynch.post[%d] response received: status: %s len: %d", index, resp.status, len(resp.data))
+	case <-time.After(chnlTimeOut):
+		log.Printf("asynch.post[%d] timed out waiting for response timeout: %f", index, chnlTimeOut.Seconds())
 		return nil, nil, pbmlib.ErrorCode.TRX05
 	}
-	log.Printf("Response: %s", string(resp.data))
+	if Cfg.DebugEnabled {
+		log.Printf("asynch.post[%d] Response: %s", index, string(resp.data))
+	}
 	return resp.data, nil, pbmlib.ErrorCode.TRX00
 }
