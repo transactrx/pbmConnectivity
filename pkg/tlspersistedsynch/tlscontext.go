@@ -296,11 +296,6 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 			} else {
 				log.Printf("%s s.conn.close - conn was null", s.name)
 			}
-
-			return
-		default:
-			// Optional: Add a short sleep to prevent busy waiting in the select loop
-			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
