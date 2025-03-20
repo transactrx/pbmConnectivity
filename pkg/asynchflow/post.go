@@ -51,13 +51,13 @@ func (pc *AsynchFlow) Post(claim []byte, header map[string][]string) ([]byte, ma
 	// Wait for response with timeout
 	select {
 	case resp = <-respCh:
-		log.Printf("asynch.post[%d] response received: status: %s len: %d", index, resp.status, len(resp.data))
+		log.Printf("asynch.post[%d] tid: %s response received: status: %s len: %d", index,tid, resp.status, len(resp.data))
 	case <-time.After(chnlTimeOut):
-		log.Printf("asynch.post[%d] timed out waiting for response timeout: %f", index, chnlTimeOut.Seconds())
+		log.Printf("asynch.post[%d] tid: %s timed out waiting for response timeout: %f", index, tid,chnlTimeOut.Seconds())
 		return nil, nil, pbmlib.ErrorCode.TRX05
 	}
 	if Cfg.DebugEnabled {
-		log.Printf("asynch.post[%d] Response: %s", index, string(resp.data))
+		log.Printf("asynch.post[%d] tid: %s Response: %s", index,tid, string(resp.data))
 	}
 	return resp.data, nil, pbmlib.ErrorCode.TRX00
 }
