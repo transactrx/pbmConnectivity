@@ -2,7 +2,6 @@ package asynchflow
 
 import (
 	"bytes"
-	//"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -10,8 +9,6 @@ import (
 	"net"
 	"os"
 	"sync/atomic"
-
-	//"os"
 	"strconv"
 	"strings"
 	"sync"
