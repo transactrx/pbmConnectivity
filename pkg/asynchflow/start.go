@@ -154,7 +154,7 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 	tmp, ok = cfgMap["endOfRecordChar"].(string)
 
 	if ok {
-		log.Printf("tmp: %v",tmp)
+		log.Printf("endOfRecordChar tmp: %v",tmp)
 		if tmp == "EOT" {
 			Cfg.EndOfRecordChar = 0x04
 		} else if tmp == "LEN" {
