@@ -26,7 +26,7 @@ func main() {
 	const HEADER_CHECK_LEN = 10
 
 	config["pbmUrl"] = "10.0.120.250"
-	config["pbmPort"] = "30008"
+	config["pbmPort"] = "30009"
 	config["pbmReceiveTimeOut"] = "10"
 	config["pbmQueueTimeOut"] = "10"
 	config["pbmInsecureSkipVerify"] = true
@@ -35,10 +35,10 @@ func main() {
 	config["headerCheck"] = true
 	config["headerCheckOffset"] = strconv.Itoa(HEADER_CHECK_OFFSET)
 	config["HeaderCheckLen"] = strconv.Itoa(HEADER_CHECK_LEN)
-	config["endOfRecordChar"] = "LEN"
+	config["endOfRecordChar"] = "ETX"
 	config["msgLenOffset"] = strconv.Itoa(6) // zero based offset 
 	config["msgLenWidth"] = strconv.Itoa(5)  // ASCII right justified len
-	config["debugEnabled"] = false
+	config["debugEnabled"] = true
 	config["MessageLenType"] = 0
 	
 

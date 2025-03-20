@@ -394,6 +394,10 @@ func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *
 	var tranStatus Status = MoreDataPending
 	var err error
 
+	if Cfg.DebugEnabled {
+		log.Printf("FindFullTransaction endofchar: %v  (Hex): %x",Cfg.EndOfRecordChar,input[:inputLen])
+	}
+
 	if inputLen < 0 || inputLen > len(input) {
 		return false, ParseError, errors.New("invalid input length")
 	}
