@@ -122,7 +122,7 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 	// Initialize sites based on parsed URLs
 	for i, url := range appCfg.PbmUrl {
 		activeSite = false
-		activeSite = Cfg.PbmActiveSites[i]
+		activeSite = appCfg.PbmActiveSites[i]
 		ctx.sites[i] = &Site{URL: url, Active: activeSite}
 	}
 
@@ -153,7 +153,7 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 	}
 
 	// Start monitoring with a threshold of 5 errors and a check interval of 10 seconds
-	ctx.StartMonitoring(Cfg.DisconnectFailedCount, 10*time.Second)
+	ctx.StartMonitoring(appCfg.DisconnectFailedCount, 10*time.Second)
 
 	return ctx, nil
 }
@@ -235,7 +235,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				}
 				//log.Printf("%s Rcvd %d bytes data: '%s'", s.name, bytes, readBuffer)
 				log.Printf("%s Rcvd %d bytes", s.name, bytes)
-				retVal, state, err := FindFullTransaction(readBuffer, bytes, &tmpBuffer, &outputLen, tranFoundState, &expectedMsgLen)
+				retVal, state, err := FindFullTransaction(readBuffer, bytes, &tmpBuffer, &outputLen, tranFoundState, &expectedMsgLen,s.appConfig)
 				tranFoundState = state
 				if err != nil {
 					log.Printf("%s FindFullTransaction failed err: %s status: %s", s.name, err, state)
@@ -322,12 +322,12 @@ func (s Status) String() string {
 	}
 }
 
-func FindFullTransactionUseASCIILen(input []byte, inputLen int, output *[]byte, outputLen *int, state Status, expectedMsgLen *int) (bool, Status, error) {
-	headerLen := Cfg.MessageLenWidth
-	headerOffset := Cfg.MessageLenOffset
+func FindFullTransactionUseASCIILen(input []byte, inputLen int, output *[]byte, outputLen *int, state Status, expectedMsgLen *int,appCfg Config) (bool, Status, error) {
+	headerLen := appCfg.MessageLenWidth
+	headerOffset := appCfg.MessageLenOffset
 	tmpLen := *outputLen + inputLen
 
-	if Cfg.DebugEnabled {
+	if appCfg.DebugEnabled {
 		log.Printf("FindFullTransactionUseASCIILen - expected: %d, outputLen: %d, headerLen: %d, headerOffset: %d, tmpLen: %d", *expectedMsgLen, *outputLen, headerLen, headerOffset, tmpLen)
 	}
 
@@ -340,7 +340,7 @@ func FindFullTransactionUseASCIILen(input []byte, inputLen int, output *[]byte, 
 
 	// Step 1: Ensure the header is fully available
 	if *outputLen < headerOffset+headerLen {
-		if Cfg.DebugEnabled {
+		if appCfg.DebugEnabled {
 			log.Printf("Not enough data for header - outputLen: %d, required: %d", *outputLen, headerOffset+headerLen)
 		}
 		return false, MoreDataPending, nil
@@ -353,13 +353,13 @@ func FindFullTransactionUseASCIILen(input []byte, inputLen int, output *[]byte, 
 		if err != nil || expectedLen <= 0 {
 			return false, ParseError, errors.New("invalid ASCII header length")
 		}
-		if Cfg.MessageLenType == 0 {
+		if appCfg.MessageLenType == 0 {
 			*expectedMsgLen = expectedLen //  cvs case includes full buffer
-		} else if Cfg.MessageLenType == 1 {
+		} else if appCfg.MessageLenType == 1 {
 			*expectedMsgLen = expectedLen + headerLen //  optumrxsolutions excludes header so need to add to incoming
 		}
 
-		if Cfg.DebugEnabled {
+		if appCfg.DebugEnabled {
 			log.Printf("Parsed header: expectedMsgLen = %d outputLen: %d", *expectedMsgLen, *outputLen)
 		}
 	}
@@ -375,7 +375,7 @@ func FindFullTransactionUseASCIILen(input []byte, inputLen int, output *[]byte, 
 	// Step 4: Wait for more data
 	remaining := *expectedMsgLen - *outputLen
 	if remaining > 0 {
-		if Cfg.DebugEnabled {
+		if appCfg.DebugEnabled {
 			log.Printf("Waiting for more data - remaining: %d, outputLen: %d, expectedMsgLen: %d", remaining, *outputLen, *expectedMsgLen)
 		}
 		return false, MoreDataPending, nil
@@ -385,14 +385,14 @@ func FindFullTransactionUseASCIILen(input []byte, inputLen int, output *[]byte, 
 }
 
 // FindFullTransaction processes input bytes and updates the output with complete transactions.
-func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *int, state Status, expectedMsgLen *int) (bool, Status, error) {
+func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *int, state Status, expectedMsgLen *int,appCfg Config) (bool, Status, error) {
 	// Ensure the input length is valid
 	var tranFound bool = false
 	var tranStatus Status = MoreDataPending
 	var err error
 
-	if Cfg.DebugEnabled {
-		log.Printf("FindFullTransaction endofchar: %v  (Hex): %x",Cfg.EndOfRecordChar,input[:inputLen])
+	if appCfg.DebugEnabled {
+		log.Printf("FindFullTransaction endofchar: %v  (Hex): %x",appCfg.EndOfRecordChar,input[:inputLen])
 	}
 
 	if inputLen < 0 || inputLen > len(input) {
@@ -405,8 +405,8 @@ func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *
 		return false, ParseError, errors.New("output buffer overflow")
 	}
 
-	if Cfg.EndOfRecordChar == 0x00 { // TODO: write code to find end of transaction using ASCII Len
-		tranFound, tranStatus, err = FindFullTransactionUseASCIILen(input, inputLen, output, outputLen, state, expectedMsgLen)
+	if appCfg.EndOfRecordChar == 0x00 { // TODO: write code to find end of transaction using ASCII Len
+		tranFound, tranStatus, err = FindFullTransactionUseASCIILen(input, inputLen, output, outputLen, state, expectedMsgLen,appCfg)
 		return tranFound, tranStatus, err
 	} else {
 		// Determine how much input we can append
@@ -415,7 +415,7 @@ func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *
 			bytesToAppend = availableSpace
 		}
 		// Check for ETX (0x03) in the input data
-		if idx := bytes.IndexByte(input[:bytesToAppend], Cfg.EndOfRecordChar); idx != -1 {
+		if idx := bytes.IndexByte(input[:bytesToAppend], appCfg.EndOfRecordChar); idx != -1 {
 			// Found ETX, append up to and including the ETX
 			copy((*output)[*outputLen:], input[:idx+1]) // Copy the valid portion to output
 			*outputLen += idx + 1                       // Update the output length
@@ -495,7 +495,7 @@ func (s *TlsSession) ProcessResponseWorker() {
 		case response := <-s.readCh1:
 			log.Printf("%s %d bytes received status: %s err: %v", s.name, len(response.data), response.status, response.err)
 			if response.status != ParseError {
-				responseHeader := GetHeader(response.data)
+				responseHeader := GetHeader(response.data,s.appConfig)
 				if len(responseHeader) > 0 {
 					// Load and delete the transaction ID from responsePbmHeader
 					tid, ok := responsePbmHeader.LoadAndDelete(responseHeader)
@@ -539,48 +539,17 @@ func (s *TlsSession) ProcessResponseWorker() {
 
 }
 
-func GetHeader(response []byte) (string) {
+func GetHeader(response []byte,appCfg Config) (string) {
 
 	var responseHeader []byte 
-	if len(response) > Cfg.HeaderCheckOffset+Cfg.HeaderCheckLen {
-		responseHeader = make([]byte, Cfg.HeaderCheckLen)
-		copy(responseHeader, response[Cfg.HeaderCheckOffset:Cfg.HeaderCheckOffset+Cfg.HeaderCheckLen])
-		if Cfg.DebugEnabled {
-			log.Printf("Response header: %s offset: %d len: %d ", string(responseHeader), Cfg.HeaderCheckOffset, Cfg.HeaderCheckLen)
+	if len(response) > appCfg.HeaderCheckOffset+appCfg.HeaderCheckLen {
+		responseHeader = make([]byte, appCfg.HeaderCheckLen)
+		copy(responseHeader, response[appCfg.HeaderCheckOffset:appCfg.HeaderCheckOffset+appCfg.HeaderCheckLen])
+		if appCfg.DebugEnabled {
+			log.Printf("Response header: %s offset: %d len: %d ", string(responseHeader), appCfg.HeaderCheckOffset, appCfg.HeaderCheckLen)
 		}
 	}
 	return string(responseHeader)
-}
-
-// MRG 9/23/24 compare response header vs request header
-// true - valid response
-// false -- issue with incoming header (potential swapped responses)
-func IsValidResponse(response []byte, requestHeader string) (bool, string) {
-
-	//log.Printf("PBM response data(ALL) '%s'", string(response))
-	result := false
-	respHeader := ""
-
-	if len(response) > Cfg.HeaderCheckOffset+Cfg.HeaderCheckLen {
-		if len(requestHeader) > Cfg.HeaderCheckLen {
-			requestHeader = requestHeader[:Cfg.HeaderCheckLen] // truncate to 23 characters if longer
-		}
-		responseHeader := make([]byte, Cfg.HeaderCheckLen)
-		copy(responseHeader, response[Cfg.HeaderCheckOffset:Cfg.HeaderCheckOffset+Cfg.HeaderCheckLen])
-		// Compare response hdr vs claim header
-		reqHdrString := fmt.Sprintf("%-*s", Cfg.HeaderCheckLen, requestHeader)
-		if Cfg.DebugEnabled {
-			log.Printf("Response header: %s offset: %d len: %d ", string(responseHeader), Cfg.HeaderCheckOffset, Cfg.HeaderCheckLen)
-		}
-		respHeader = string(responseHeader)
-		if string(responseHeader) == reqHdrString {
-			result = true
-		} else {
-			log.Printf("ValidateResponse failed mismatch FULLresp: '%s' requestHdr: '%s'", string(response), requestHeader)
-			result = true
-		}
-	}
-	return result, respHeader
 }
 
 // Write sends data through a connection.
