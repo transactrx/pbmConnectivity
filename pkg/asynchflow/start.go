@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-type AsynchFlow struct {
-	test string
+type AsynchFlow struct {	
+	Cfg    Config 
 }
 
 var Ctx *TlsContext
@@ -37,7 +37,7 @@ type Config struct {
 
 const PBM_DATA_BUFFER = 16384
 
-var Cfg Config
+//var Cfg Config
 
 func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 
@@ -46,12 +46,12 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 	if ok {
 
 		urlSites := strings.Split(tmp, ",")
-		Cfg.PbmUrl = make([]string, len(urlSites))
+		pc.Cfg.PbmUrl = make([]string, len(urlSites))
 		for i, v := range urlSites {
 			if v == "true" {
-				Cfg.PbmUrl[i] = v
+				pc.Cfg.PbmUrl[i] = v
 			} else {
-				Cfg.PbmUrl[i] = v
+				pc.Cfg.PbmUrl[i] = v
 			}
 		}
 	} else {
@@ -59,14 +59,14 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 	}
 	tmp, ok = cfgMap["pbmPort"].(string)
 	if ok {
-		Cfg.PbmPort = tmp
+		pc.Cfg.PbmPort = tmp
 	} else {
 		log.Printf("Start port not Provided failed")
 	}
 	tmp, ok = cfgMap["pbmReceiveTimeOut"].(string)
 
 	if ok {
-		Cfg.PbmReceiveTimeOut = tmp
+		pc.Cfg.PbmReceiveTimeOut = tmp
 	} else {
 		log.Printf("Start receive time-out not Provided failed")
 	}
@@ -74,10 +74,10 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 	tmpBool, ok1 := cfgMap["pbmInsecureSkipVerify"].(bool)
 
 	if ok1 {
-		Cfg.PbmInsecureSkipVerify = tmpBool
+		pc.Cfg.PbmInsecureSkipVerify = tmpBool
 	} else {
 		log.Printf("PbmInsecureSkipVerify not Provided failed")
-		Cfg.PbmInsecureSkipVerify = false
+		pc.Cfg.PbmInsecureSkipVerify = false
 	}
 	tmp, ok = cfgMap["pbmOutboundChnls"].(string)
 
@@ -85,9 +85,9 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 		num, err := strconv.Atoi(tmp)
 		if err != nil {
 			log.Printf("Start strconv.Atoi failed error:  %s", err)
-			Cfg.PbmOutboundChnls = 2 // set default to 2
+			pc.Cfg.PbmOutboundChnls = 2 // set default to 2
 		} else {
-			Cfg.PbmOutboundChnls = num
+			pc.Cfg.PbmOutboundChnls = num
 		}
 	} else {
 		log.Printf("Total number of chnls not Provided failed")
@@ -95,25 +95,25 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 	tmp, ok = cfgMap["pbmQueueTimeOut"].(string)
 
 	if ok {
-		Cfg.PbmQueueTimeOut = tmp
+		pc.Cfg.PbmQueueTimeOut = tmp
 	} else {
 		log.Printf("Start queue time-out not Provided failed")
 	}
 	tmp, ok = cfgMap["pbmActiveSites"].(string) // idea is to provide a comma delimitted boolean values (e.g true,false,true,false,.... site-n
 	if ok {
 		activeSites := strings.Split(tmp, ",")
-		Cfg.PbmActiveSites = make([]bool, len(activeSites))
+		pc.Cfg.PbmActiveSites = make([]bool, len(activeSites))
 		for i, v := range activeSites {
 			if v == "true" {
-				Cfg.PbmActiveSites[i] = true
+				pc.Cfg.PbmActiveSites[i] = true
 			} else {
-				Cfg.PbmActiveSites[i] = false
+				pc.Cfg.PbmActiveSites[i] = false
 			}
 		}
 
-		log.Printf("values are %v", Cfg.PbmActiveSites)
+		log.Printf("values are %v", pc.Cfg.PbmActiveSites)
 
-		//Cfg.PbmQueueTimeOut = tmp
+		//pc.Cfg.PbmQueueTimeOut = tmp
 	} else {
 		log.Printf("Start site(s) status not Provided failed")
 	}
@@ -124,10 +124,10 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 	tmpBool, ok1 = cfgMap["headerCheck"].(bool)
 
 	if ok1 {
-		Cfg.HeaderCheck = tmpBool
+		pc.Cfg.HeaderCheck = tmpBool
 	} else {
 		log.Printf("HeaderCheck not Provided failed")
-		Cfg.HeaderCheck = false
+		pc.Cfg.HeaderCheck = false
 	}
 
 	tmp, ok = cfgMap["headerCheckOffset"].(string)
@@ -135,7 +135,7 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 	if ok {
 		num, err := strconv.Atoi(tmp)
 		if err == nil {
-			Cfg.HeaderCheckOffset = num
+			pc.Cfg.HeaderCheckOffset = num
 		}
 	} else {
 		log.Printf("HeaderCheckOffset not Provided failed")
@@ -145,7 +145,7 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 	if ok {
 		num, err := strconv.Atoi(tmp)
 		if err == nil {
-			Cfg.HeaderCheckLen = num
+			pc.Cfg.HeaderCheckLen = num
 		}
 	} else {
 		log.Printf("HeaderCheckLen not Provided failed")
@@ -156,11 +156,11 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 	if ok {
 		log.Printf("endOfRecordChar tmp: %v",tmp)
 		if tmp == "EOT" {
-			Cfg.EndOfRecordChar = 0x04
+			pc.Cfg.EndOfRecordChar = 0x04
 		} else if tmp == "LEN" {
-			Cfg.EndOfRecordChar = 0x00 // use ASCII length vs delimiter
+			pc.Cfg.EndOfRecordChar = 0x00 // use ASCII length vs delimiter
 		} else {
-			Cfg.EndOfRecordChar = 0x03
+			pc.Cfg.EndOfRecordChar = 0x03
 		}
 	} else {
 		log.Printf("endOfRecordChar not Provided failed")
@@ -170,7 +170,7 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 	if ok {
 		num, err := strconv.Atoi(tmp)
 		if err == nil {
-			Cfg.MessageLenOffset = num
+			pc.Cfg.MessageLenOffset = num
 		}
 	} else {
 		log.Printf("msgLenOffset not Provided failed")
@@ -181,7 +181,7 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 	if ok {
 		num, err := strconv.Atoi(tmp)
 		if err == nil {
-			Cfg.MessageLenWidth = num
+			pc.Cfg.MessageLenWidth = num
 		}
 	} else {
 		log.Printf("msgLenWidth not Provided failed")
@@ -190,21 +190,21 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 	tmpBool, ok1 = cfgMap["debugEnabled"].(bool)
 
 	if ok1 {
-		Cfg.DebugEnabled= tmpBool
+		pc.Cfg.DebugEnabled= tmpBool
 	} else {
 		log.Printf("debugEnabled not Provided failed")
-		Cfg.DebugEnabled = false
+		pc.Cfg.DebugEnabled = false
 	}
 
 	tmp, ok = cfgMap["messageLenType"].(string)
 
 	if ok {
-		Cfg.MessageLenType = 0
+		pc.Cfg.MessageLenType = 0
 		log.Printf("tmp: %v",tmp)
 		if tmp == "INCLUDELEN" {
-			Cfg.MessageLenType = 0
+			pc.Cfg.MessageLenType = 0
 		} else if tmp == "EXCLUDELEN" {
-			Cfg.MessageLenType = 1			
+			pc.Cfg.MessageLenType = 1			
 		} 
 	} else {
 		log.Printf("messageLenType not Provided failed")
@@ -212,20 +212,20 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 
 	tmp, ok = cfgMap["DisconnectFailedCount"].(string)
 
-	Cfg.DisconnectFailedCount = 10 // 10 failure disconnect default value 
+	pc.Cfg.DisconnectFailedCount = 10 // 10 failure disconnect default value 
 	if ok {
 		num, err := strconv.Atoi(tmp)
 		if err == nil {
-			Cfg.DisconnectFailedCount = num
+			pc.Cfg.DisconnectFailedCount = num
 		}
 	} else {
 		log.Printf("DisconnectFailedCount not Provided failed")
 	}
 
-	PrintStructFieldsAndValues(Cfg)
+	PrintStructFieldsAndValues(pc.Cfg)
 	
 	// run TlsContext
-	Ctx, err = NewTlsContext(Cfg)
+	Ctx, err = NewTlsContext(pc.Cfg)
 	if err != nil {
 		log.Printf("Start NewTlsContext failed error: %s - critical", err)
 		panic(err)
@@ -233,6 +233,203 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 
 	return nil
 }
+
+
+
+// func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
+
+// 	var err error
+// 	tmp, ok := cfgMap["pbmUrl"].(string)
+// 	if ok {
+
+// 		urlSites := strings.Split(tmp, ",")
+// 		Cfg.PbmUrl = make([]string, len(urlSites))
+// 		for i, v := range urlSites {
+// 			if v == "true" {
+// 				Cfg.PbmUrl[i] = v
+// 			} else {
+// 				Cfg.PbmUrl[i] = v
+// 			}
+// 		}
+// 	} else {
+// 		log.Printf("Start Url(s) not Provided failed")
+// 	}
+// 	tmp, ok = cfgMap["pbmPort"].(string)
+// 	if ok {
+// 		Cfg.PbmPort = tmp
+// 	} else {
+// 		log.Printf("Start port not Provided failed")
+// 	}
+// 	tmp, ok = cfgMap["pbmReceiveTimeOut"].(string)
+
+// 	if ok {
+// 		Cfg.PbmReceiveTimeOut = tmp
+// 	} else {
+// 		log.Printf("Start receive time-out not Provided failed")
+// 	}
+
+// 	tmpBool, ok1 := cfgMap["pbmInsecureSkipVerify"].(bool)
+
+// 	if ok1 {
+// 		Cfg.PbmInsecureSkipVerify = tmpBool
+// 	} else {
+// 		log.Printf("PbmInsecureSkipVerify not Provided failed")
+// 		Cfg.PbmInsecureSkipVerify = false
+// 	}
+// 	tmp, ok = cfgMap["pbmOutboundChnls"].(string)
+
+// 	if ok {
+// 		num, err := strconv.Atoi(tmp)
+// 		if err != nil {
+// 			log.Printf("Start strconv.Atoi failed error:  %s", err)
+// 			Cfg.PbmOutboundChnls = 2 // set default to 2
+// 		} else {
+// 			Cfg.PbmOutboundChnls = num
+// 		}
+// 	} else {
+// 		log.Printf("Total number of chnls not Provided failed")
+// 	}
+// 	tmp, ok = cfgMap["pbmQueueTimeOut"].(string)
+
+// 	if ok {
+// 		Cfg.PbmQueueTimeOut = tmp
+// 	} else {
+// 		log.Printf("Start queue time-out not Provided failed")
+// 	}
+// 	tmp, ok = cfgMap["pbmActiveSites"].(string) // idea is to provide a comma delimitted boolean values (e.g true,false,true,false,.... site-n
+// 	if ok {
+// 		activeSites := strings.Split(tmp, ",")
+// 		Cfg.PbmActiveSites = make([]bool, len(activeSites))
+// 		for i, v := range activeSites {
+// 			if v == "true" {
+// 				Cfg.PbmActiveSites[i] = true
+// 			} else {
+// 				Cfg.PbmActiveSites[i] = false
+// 			}
+// 		}
+
+// 		log.Printf("values are %v", Cfg.PbmActiveSites)
+
+// 		//Cfg.PbmQueueTimeOut = tmp
+// 	} else {
+// 		log.Printf("Start site(s) status not Provided failed")
+// 	}
+
+// 	// TODO MRG 10.8.24 - make sure this is done thru config
+// 	// for now hardcoding it
+
+// 	tmpBool, ok1 = cfgMap["headerCheck"].(bool)
+
+// 	if ok1 {
+// 		Cfg.HeaderCheck = tmpBool
+// 	} else {
+// 		log.Printf("HeaderCheck not Provided failed")
+// 		Cfg.HeaderCheck = false
+// 	}
+
+// 	tmp, ok = cfgMap["headerCheckOffset"].(string)
+
+// 	if ok {
+// 		num, err := strconv.Atoi(tmp)
+// 		if err == nil {
+// 			Cfg.HeaderCheckOffset = num
+// 		}
+// 	} else {
+// 		log.Printf("HeaderCheckOffset not Provided failed")
+// 	}
+// 	tmp, ok = cfgMap["HeaderCheckLen"].(string)
+
+// 	if ok {
+// 		num, err := strconv.Atoi(tmp)
+// 		if err == nil {
+// 			Cfg.HeaderCheckLen = num
+// 		}
+// 	} else {
+// 		log.Printf("HeaderCheckLen not Provided failed")
+// 	}
+
+// 	tmp, ok = cfgMap["endOfRecordChar"].(string)
+
+// 	if ok {
+// 		log.Printf("endOfRecordChar tmp: %v",tmp)
+// 		if tmp == "EOT" {
+// 			Cfg.EndOfRecordChar = 0x04
+// 		} else if tmp == "LEN" {
+// 			Cfg.EndOfRecordChar = 0x00 // use ASCII length vs delimiter
+// 		} else {
+// 			Cfg.EndOfRecordChar = 0x03
+// 		}
+// 	} else {
+// 		log.Printf("endOfRecordChar not Provided failed")
+// 	}
+// 	tmp, ok = cfgMap["msgLenOffset"].(string)
+
+// 	if ok {
+// 		num, err := strconv.Atoi(tmp)
+// 		if err == nil {
+// 			Cfg.MessageLenOffset = num
+// 		}
+// 	} else {
+// 		log.Printf("msgLenOffset not Provided failed")
+// 	}
+
+// 	tmp, ok = cfgMap["msgLenWidth"].(string)
+
+// 	if ok {
+// 		num, err := strconv.Atoi(tmp)
+// 		if err == nil {
+// 			Cfg.MessageLenWidth = num
+// 		}
+// 	} else {
+// 		log.Printf("msgLenWidth not Provided failed")
+// 	}
+
+// 	tmpBool, ok1 = cfgMap["debugEnabled"].(bool)
+
+// 	if ok1 {
+// 		Cfg.DebugEnabled= tmpBool
+// 	} else {
+// 		log.Printf("debugEnabled not Provided failed")
+// 		Cfg.DebugEnabled = false
+// 	}
+
+// 	tmp, ok = cfgMap["messageLenType"].(string)
+
+// 	if ok {
+// 		Cfg.MessageLenType = 0
+// 		log.Printf("tmp: %v",tmp)
+// 		if tmp == "INCLUDELEN" {
+// 			Cfg.MessageLenType = 0
+// 		} else if tmp == "EXCLUDELEN" {
+// 			Cfg.MessageLenType = 1			
+// 		} 
+// 	} else {
+// 		log.Printf("messageLenType not Provided failed")
+// 	}	
+
+// 	tmp, ok = cfgMap["DisconnectFailedCount"].(string)
+
+// 	Cfg.DisconnectFailedCount = 10 // 10 failure disconnect default value 
+// 	if ok {
+// 		num, err := strconv.Atoi(tmp)
+// 		if err == nil {
+// 			Cfg.DisconnectFailedCount = num
+// 		}
+// 	} else {
+// 		log.Printf("DisconnectFailedCount not Provided failed")
+// 	}
+
+// 	PrintStructFieldsAndValues(Cfg)
+	
+// 	// run TlsContext
+// 	Ctx, err = NewTlsContext(Cfg)
+// 	if err != nil {
+// 		log.Printf("Start NewTlsContext failed error: %s - critical", err)
+// 		panic(err)
+// 	}
+
+// 	return nil
+// }
 
 func PrintStructFieldsAndValues(data interface{}) {
 	val := reflect.ValueOf(data)

@@ -19,7 +19,7 @@ type Claim struct {
 
 func (pc *AsynchFlow) Post(claim []byte, header map[string][]string) ([]byte, map[string][]string, pbmlib.ErrorInfo) {
 
-	readTimeOut, _ := strconv.Atoi(Cfg.PbmReceiveTimeOut)
+	readTimeOut, _ := strconv.Atoi(pc.Cfg.PbmReceiveTimeOut)
 	tid := "Unknown-TID"
 	requestHeader := "nodata"
 	if values, ok := header["transmissionId"]; ok && len(values) > 0 {
@@ -56,7 +56,7 @@ func (pc *AsynchFlow) Post(claim []byte, header map[string][]string) ([]byte, ma
 		log.Printf("asynch.post[%d] tid: %s timed out waiting for response timeout: %f", index, tid,chnlTimeOut.Seconds())
 		return nil, nil, pbmlib.ErrorCode.TRX05
 	}
-	if Cfg.DebugEnabled {
+	if pc.Cfg.DebugEnabled {
 		log.Printf("asynch.post[%d] tid: %s Response: %s", index,tid, string(resp.data))
 	}
 	return resp.data, nil, pbmlib.ErrorCode.TRX00

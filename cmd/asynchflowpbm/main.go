@@ -30,7 +30,7 @@ func main() {
 	config["pbmReceiveTimeOut"] = "10"
 	config["pbmQueueTimeOut"] = "10"
 	config["pbmInsecureSkipVerify"] = true
-	config["pbmOutboundChnls"] = "2"
+	config["pbmOutboundChnls"] = "1"
 	config["pbmActiveSites"] = "true"
 	config["headerCheck"] = true
 	config["headerCheckOffset"] = strconv.Itoa(HEADER_CHECK_OFFSET)
@@ -38,7 +38,7 @@ func main() {
 	config["endOfRecordChar"] = "ETX"
 	config["msgLenOffset"] = strconv.Itoa(6) // zero based offset 
 	config["msgLenWidth"] = strconv.Itoa(5)  // ASCII right justified len
-	config["debugEnabled"] = true
+	config["debugEnabled"] = false
 	config["MessageLenType"] = 0
 	
 
@@ -61,14 +61,14 @@ func main() {
 		}
 	}()
 	
-	go func() {
-		response, _, err := tlsCon.Post([]byte(claim), header)
-		if err != pbmlib.ErrorCode.TRX00 {
-			log.Printf("tlsCon.post failed: '%v'", err)
-		} else {
-			log.Printf("asynchflow response: '%s'", response)
-		}
-	}()
+	// go func() {
+	// 	response, _, err := tlsCon.Post([]byte(claim), header)
+	// 	if err != pbmlib.ErrorCode.TRX00 {
+	// 		log.Printf("tlsCon.post failed: '%v'", err)
+	// 	} else {
+	// 		log.Printf("asynchflow response: '%s'", response)
+	// 	}
+	// }()
 
 
 	stats := make(map[string]interface{})
