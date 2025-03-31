@@ -2,6 +2,6 @@ package asynchflow
 
 func (pc *AsynchFlow) Close() error {
 
-	Ctx.Close()
+	pc.Ctx.Close()
 	return nil
 }

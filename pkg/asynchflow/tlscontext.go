@@ -8,12 +8,13 @@ import (
 	"log"
 	"net"
 	"os"
-	"sync/atomic"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
+
 type Status int
 
 const (
@@ -22,6 +23,7 @@ const (
 	TransactionFound               // A full transaction has been found
 	ParseError                     // Indicates a parsing error
 )
+
 type Site struct {
 	URL    string
 	Active bool
@@ -44,12 +46,41 @@ type TlsSession struct {
 	readCh1   chan Response
 	writeCh   chan []byte
 	closeCh   chan bool
-	connected bool
+	connected atomic.Bool
 	mu        sync.Mutex
 	tlsConfig *tls.Config
 	appConfig Config
 	chnl      int
-	errors    int
+	//errors    int
+
+	activeClaims atomic.Int32 // Tracks # of claims awaiting responses
+	errorCount   atomic.Int32 // Tracks total errors
+	paused       atomic.Bool  // Flag to pause connection if error threshold exceeded
+
+}
+
+// RegisterError increments the error count and checks for pause/disconnect.
+func (s *TlsSession) RegisterError(maxErrors int, maxPause int) {
+	count := s.errorCount.Add(1)
+	if int32(maxPause) > 0 && count >= int32(maxPause) {
+		s.paused.Store(true) // Pause if errors exceed threshold
+	}
+	if count >= int32(maxErrors) {
+		s.Disconnect()
+	}
+}
+
+// Disconnect closes the session.
+func (s *TlsSession) Disconnect() {
+	if s.connected.CompareAndSwap(true, false) {
+		s.closeCh <- true
+	}
+}
+
+// ResetErrors resets the error count when session stabilizes.
+func (s *TlsSession) ResetErrors() {
+	s.errorCount.Store(0)
+	s.paused.Store(false)
 }
 
 // TlsContext manages multiple TLS sessions.
@@ -115,7 +146,6 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 		sessions: make([]*TlsSession, appCfg.PbmOutboundChnls),
 		bitmap:   make([]bool, appCfg.PbmOutboundChnls),
 		sites:    make([]*Site, len(appCfg.PbmUrl)), // Create sites based on the number of URLs
-
 	}
 
 	activeSite := false
@@ -136,17 +166,18 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 		addr := site.URL + ":" + appCfg.PbmPort
 
 		session := &TlsSession{
-			name:      createSessionName(i, site.URL),
-			address:   addr,
-			readCh:    make(chan []byte),
-			readCh1:   make(chan Response, CLAIM_QUEUE_LEN),
-			writeCh:   make(chan []byte, CLAIM_QUEUE_LEN),
-			closeCh:   make(chan bool),
-			connected: false,
+			name:    createSessionName(i, site.URL),
+			address: addr,
+			readCh:  make(chan []byte),
+			readCh1: make(chan Response, CLAIM_QUEUE_LEN),
+			writeCh: make(chan []byte, CLAIM_QUEUE_LEN),
+			closeCh: make(chan bool),
+			//connected: connected.Store(false),
 			tlsConfig: tlsConfig,
 			appConfig: appCfg,
 			chnl:      i,
 		}
+		session.connected.Store(false)
 		ctx.sessions[i] = session
 		go session.handleConnection(ctx) // Pass ctx to handleConnection
 		go session.ProcessResponseWorker()
@@ -167,48 +198,66 @@ func (ctx *TlsContext) SetSiteStatus(index int, active bool) {
 }
 
 func (ctx *TlsContext) IncrementError(index int) {
-	ctx.sessions[index].mu.Lock()
-	ctx.sessions[index].errors++
-	ctx.sessions[index].mu.Unlock()
+	// ctx.sessions[index].mu.Lock()
+	// ctx.sessions[index].errors++
+	// ctx.sessions[index].mu.Unlock()
+	ctx.sessions[index].errorCount.Add(int32(1))
 }
 
 func (ctx *TlsContext) ClearError(index int) {
-	ctx.sessions[index].mu.Lock()
-	ctx.sessions[index].errors = 0
-	ctx.sessions[index].mu.Unlock()
+	// ctx.sessions[index].mu.Lock()
+	// ctx.sessions[index].errors = 0
+	// ctx.sessions[index].mu.Unlock()
+	ctx.sessions[index].errorCount.Store(0)
 }
 
 func (ctx *TlsContext) DisconnectSession(index int) {
-	ctx.sessions[index].mu.Lock()
-	defer ctx.sessions[index].mu.Unlock()
+	//ctx.sessions[index].mu.Lock()
+	//defer ctx.sessions[index].mu.Unlock()
 
-	if ctx.sessions[index].connected {
-		ctx.sessions[index].connected = false
+	if ctx.sessions[index].connected.CompareAndSwap(true, false) {
+		//ctx.sessions[index].connected = false
 		ctx.sessions[index].tlsConn.Close()
-		ctx.sessions[index].errors = 0 // Reset error count
-		//		close(ctx.sessions[index].closeCh) // Signal close
+		ctx.sessions[index].errorCount.Store(0)
 	}
 }
 
+// StartMonitoring checks session error counts at a fixed interval
 func (ctx *TlsContext) StartMonitoring(threshold int, interval time.Duration) {
 	go func() {
 		for {
 			time.Sleep(interval)
-			ctx.mu.Lock()
+
 			for i, session := range ctx.sessions {
-				session.mu.Lock()
-				if session.errors > threshold {
-					session.mu.Unlock()
-					log.Printf("%s monitor thread threshold reached current: %d threshold: %d", session.name, session.errors, threshold)
+				if session.errorCount.Load() > int32(threshold) {
+					log.Printf("%s monitor thread threshold reached current: %d threshold: %d",
+						session.name, session.errorCount.Load(), threshold)
 					ctx.DisconnectSession(i)
-				} else {
-					session.mu.Unlock()
 				}
 			}
-			ctx.mu.Unlock()
 		}
 	}()
 }
+
+// func (ctx *TlsContext) StartMonitoring(threshold int, interval time.Duration) {
+// 	go func() {
+// 		for {
+// 			time.Sleep(interval)
+// 			ctx.mu.Lock()
+// 			for i, session := range ctx.sessions {
+// 				session.mu.Lock()
+// 				if session.errors > threshold {
+// 					session.mu.Unlock()
+// 					log.Printf("%s monitor thread threshold reached current: %d threshold: %d", session.name, session.errors, threshold)
+// 					ctx.DisconnectSession(i)
+// 				} else {
+// 					session.mu.Unlock()
+// 				}
+// 			}
+// 			ctx.mu.Unlock()
+// 		}
+// 	}()
+// }
 
 // handleConnection handles reading and writing for a TLS session.
 func (s *TlsSession) handleConnection(ctx *TlsContext) {
@@ -227,6 +276,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				copy(readBuffer, zeroSlice) // Copy the zeroed slice into the buffer
 				bytes, err := s.tlsConn.Read(readBuffer)
 				if err != nil || bytes <= 0 {
+					s.activeClaims.Store(0)
 					// MRG 8.21.24 let the monitor routine disconnect after error count
 					ctx.DisconnectSession(s.chnl)
 					log.Printf("%s Read failed: %s", s.name, err)
@@ -235,7 +285,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				}
 				//log.Printf("%s Rcvd %d bytes data: '%s'", s.name, bytes, readBuffer)
 				log.Printf("%s Rcvd %d bytes", s.name, bytes)
-				retVal, state, err := FindFullTransaction(readBuffer, bytes, &tmpBuffer, &outputLen, tranFoundState, &expectedMsgLen,s.appConfig)
+				retVal, state, err := FindFullTransaction(readBuffer, bytes, &tmpBuffer, &outputLen, tranFoundState, &expectedMsgLen, s.appConfig)
 				tranFoundState = state
 				if err != nil {
 					log.Printf("%s FindFullTransaction failed err: %s status: %s", s.name, err, state)
@@ -246,6 +296,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					copy(tmpBuffer, zeroSlice) // Copy the zeroed slice into the buffer
 				} else {
 					if retVal && state == TransactionFound {
+						s.activeClaims.Add(-1)
 						// Create a new slice with the received data
 						dataToSend := make([]byte, outputLen)
 						copy(dataToSend, tmpBuffer[:outputLen])
@@ -288,11 +339,12 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					n, err := s.tlsConn.Write(data[total:])
 					if err != nil {
 						log.Printf("%s Write failed: %s", s.name, err)
-						s.setConnected(false)						
+						s.setConnected(false)
 					}
 					total += n
 				}
 				log.Printf("%s Snd %d bytes", s.name, total)
+				s.activeClaims.Add(1)
 			} else {
 				log.Printf("%s Write failed: connection is nil/not connected", s.name)
 			}
@@ -322,7 +374,7 @@ func (s Status) String() string {
 	}
 }
 
-func FindFullTransactionUseASCIILen(input []byte, inputLen int, output *[]byte, outputLen *int, state Status, expectedMsgLen *int,appCfg Config) (bool, Status, error) {
+func FindFullTransactionUseASCIILen(input []byte, inputLen int, output *[]byte, outputLen *int, state Status, expectedMsgLen *int, appCfg Config) (bool, Status, error) {
 	headerLen := appCfg.MessageLenWidth
 	headerOffset := appCfg.MessageLenOffset
 	tmpLen := *outputLen + inputLen
@@ -385,14 +437,14 @@ func FindFullTransactionUseASCIILen(input []byte, inputLen int, output *[]byte, 
 }
 
 // FindFullTransaction processes input bytes and updates the output with complete transactions.
-func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *int, state Status, expectedMsgLen *int,appCfg Config) (bool, Status, error) {
+func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *int, state Status, expectedMsgLen *int, appCfg Config) (bool, Status, error) {
 	// Ensure the input length is valid
 	var tranFound bool = false
 	var tranStatus Status = MoreDataPending
 	var err error
 
 	if appCfg.DebugEnabled {
-		log.Printf("FindFullTransaction endofchar: %v  (Hex): %x",appCfg.EndOfRecordChar,input[:inputLen])
+		log.Printf("FindFullTransaction endofchar: %v  (Hex): %x", appCfg.EndOfRecordChar, input[:inputLen])
 	}
 
 	if inputLen < 0 || inputLen > len(input) {
@@ -406,7 +458,7 @@ func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *
 	}
 
 	if appCfg.EndOfRecordChar == 0x00 { // TODO: write code to find end of transaction using ASCII Len
-		tranFound, tranStatus, err = FindFullTransactionUseASCIILen(input, inputLen, output, outputLen, state, expectedMsgLen,appCfg)
+		tranFound, tranStatus, err = FindFullTransactionUseASCIILen(input, inputLen, output, outputLen, state, expectedMsgLen, appCfg)
 		return tranFound, tranStatus, err
 	} else {
 		// Determine how much input we can append
@@ -475,16 +527,16 @@ func (s *TlsSession) reconnect(splitHandshake bool) error {
 
 // setConnected sets the connection status of the session.
 func (s *TlsSession) setConnected(status bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.connected = status
+	//s.mu.Lock()
+	//defer s.mu.Unlock()
+	s.connected.Store(status)
 }
 
 // IsConnected returns whether the session is connected.
 func (s *TlsSession) IsConnected() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.connected
+	//s.mu.Lock()
+	//defer s.mu.Unlock()
+	return s.connected.Load()
 }
 
 func (s *TlsSession) ProcessResponseWorker() {
@@ -495,7 +547,7 @@ func (s *TlsSession) ProcessResponseWorker() {
 		case response := <-s.readCh1:
 			log.Printf("%s %d bytes received status: %s err: %v", s.name, len(response.data), response.status, response.err)
 			if response.status != ParseError {
-				responseHeader := GetHeader(response.data,s.appConfig)
+				responseHeader := GetHeader(response.data, s.appConfig)
 				if len(responseHeader) > 0 {
 					// Load and delete the transaction ID from responsePbmHeader
 					tid, ok := responsePbmHeader.LoadAndDelete(responseHeader)
@@ -539,9 +591,9 @@ func (s *TlsSession) ProcessResponseWorker() {
 
 }
 
-func GetHeader(response []byte,appCfg Config) (string) {
+func GetHeader(response []byte, appCfg Config) string {
 
-	var responseHeader []byte 
+	var responseHeader []byte
 	if len(response) > appCfg.HeaderCheckOffset+appCfg.HeaderCheckLen {
 		responseHeader = make([]byte, appCfg.HeaderCheckLen)
 		copy(responseHeader, response[appCfg.HeaderCheckOffset:appCfg.HeaderCheckOffset+appCfg.HeaderCheckLen])
@@ -563,6 +615,52 @@ func (s *TlsSession) Write(index int, data []byte) error {
 // ##########################################################
 // #################### CONTEXT FUNCTIONS ###################
 // ##########################################################
+
+// func (ctx *TlsContext) FindLeastBusyChnl() (*TlsSession, int, error) {
+// 	n := len(ctx.sessions)
+// 	if n == 0 {
+// 		return nil, -1, errors.New("no sessions available")
+// 	}
+
+// 	start := int(atomic.LoadUint32(&ctx.lastUsed)) // Read last used index atomically
+// 	for i := 0; i < n; i++ {
+// 		index := (start + i) % n
+// 		if ctx.sessions[index].IsConnected() {
+// 			atomic.StoreUint32(&ctx.lastUsed, uint32(index+1)) // Update safely
+// 			return ctx.sessions[index], index, nil
+// 		}
+// 	}
+
+//		return nil, -1, errors.New("no available connections")
+//	}
+func (ctx *TlsContext) FindLeastBusyChnl() (*TlsSession, int, error) {
+	var bestSession *TlsSession = nil
+	minClaims := int32(1<<31 - 1) // Set to max int32 value
+
+	for _, s := range ctx.sessions {
+		if s.paused.Load() || !s.connected.Load() {
+			if s.appConfig.DebugEnabled {
+				log.Printf("%s paused or not connected - skipping chnl ", s.name)
+			}
+			continue // Skip paused or disconnected sessions
+		}
+		outstanding := s.activeClaims.Load()
+		if s.appConfig.DebugEnabled {
+			log.Printf("%s active claims chhl: %d activeClaims: %d ", s.name,s.chnl,s.activeClaims)
+		}
+
+		if outstanding < minClaims {
+			minClaims = outstanding
+			bestSession = s
+		}
+	}
+	if bestSession != nil {
+		return bestSession, bestSession.chnl, nil
+	} else {
+		return nil, -1, errors.New("no sessions available")
+	}
+}
+
 func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
 	n := len(ctx.sessions)
 	if n == 0 {
@@ -612,7 +710,7 @@ func (ctx *TlsContext) GetConnectionCount() int {
 	count := 0
 	for _, session := range ctx.sessions {
 		//session.mu.Lock() // Lock the session mutex to ensure thread safety for the connected status
-		if session.connected {
+		if session.connected.Load() {
 			count++
 		}
 		//session.mu.Unlock() // Unlock the session mutex after checking the status
