@@ -34,6 +34,7 @@ type Config struct {
 	MessageLenType int 	// 0 - default - includes header itself 
 						// 1 - skipheader - excludes header 
 	DisconnectFailedCount int 						
+	WaitAfterConnectSeconds  int 
 }
 
 const PBM_DATA_BUFFER = 16384
@@ -217,6 +218,20 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 	} else {
 		log.Printf("DisconnectFailedCount not Provided failed")
 	}
+
+	tmp, ok = cfgMap["WaitAfterConnectSeconds"].(string)
+
+	pc.Cfg.WaitAfterConnectSeconds = 6
+	if ok {
+		num, err := strconv.Atoi(tmp)
+		if err == nil {
+			pc.Cfg.WaitAfterConnectSeconds = num
+		}
+	} else {
+		log.Printf("WaitAfterConnectSeconds not Provided failed")
+	}
+
+	
 
 	PrintStructFieldsAndValues(pc.Cfg)
 	

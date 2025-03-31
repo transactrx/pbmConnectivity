@@ -324,8 +324,9 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					continue
 				}
 				log.Printf("%s Pausing to ensure LB is connected to vendor", s.name)
-				//if(s.waitAfterConnect)
-				//time.Sleep(6 * time.Second)
+				if(s.appConfig.WaitAfterConnectSeconds>0){
+					time.Sleep(time.Duration(s.appConfig.WaitAfterConnectSeconds) * time.Second)
+				}				
 				s.setConnected(true)
 			}
 		}
@@ -484,6 +485,7 @@ func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *
 
 func (s *TlsSession) reconnect(splitHandshake bool) error {
 	log.Printf("%s connect connecting to '%s' Pbm Certificate Insecure Skip Verify: %t splitHandshake: %t", s.name, s.address, s.appConfig.PbmInsecureSkipVerify, splitHandshake)
+		start := time.Now() // Capture the start time
 	if splitHandshake { // split call using tcp then tls - in order to configure keep-alive
 		// create dialer with keep-alive and connect time-out
 		timeout := 5 * time.Second
@@ -523,8 +525,8 @@ func (s *TlsSession) reconnect(splitHandshake bool) error {
 		s.tlsConn = conn
 		s.mu.Unlock()
 	}
-	
-	log.Printf("%s connect connected to '%s'", s.name, s.address)
+	elapsed := time.Since(start) // Calculate elapsed time
+	log.Printf("%s connect ok tls handshake duration: %d ms url: %s", s.name,elapsed.Milliseconds(), s.address)
 	return nil
 }
 
