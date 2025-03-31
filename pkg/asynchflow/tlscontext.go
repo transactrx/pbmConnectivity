@@ -324,7 +324,8 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					continue
 				}
 				log.Printf("%s Pausing to ensure LB is connected to vendor", s.name)
-				time.Sleep(6 * time.Second)
+				//if(s.waitAfterConnect)
+				//time.Sleep(6 * time.Second)
 				s.setConnected(true)
 			}
 		}
@@ -505,7 +506,8 @@ func (s *TlsSession) reconnect(splitHandshake bool) error {
 			tcpConn.Close()
 			return err
 		}
-		log.Printf("%s connect connecting to '%s' handshake success", s.name, s.address)
+		remoteAddr := conn.RemoteAddr().(*net.TCPAddr)
+		log.Printf("%s connect connecting to '%s'(%s:%d)  handshake success", s.name, s.address,remoteAddr.IP,remoteAddr.Port)
 		// After a successful handshake, set the read deadline to "never"
 		conn.SetReadDeadline(time.Time{})
 		s.mu.Lock()
@@ -521,6 +523,7 @@ func (s *TlsSession) reconnect(splitHandshake bool) error {
 		s.tlsConn = conn
 		s.mu.Unlock()
 	}
+	
 	log.Printf("%s connect connected to '%s'", s.name, s.address)
 	return nil
 }
