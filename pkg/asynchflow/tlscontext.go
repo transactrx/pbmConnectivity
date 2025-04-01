@@ -268,6 +268,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 	tranFoundState := NoData
 	outputLen := 0      // Current number of valid bytes in output
 	expectedMsgLen := 0 // if ASCII len
+	var keepAliveReply = []byte{0x8d}
 
 	go func() {
 		for {
@@ -283,10 +284,19 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					time.Sleep(1 * time.Second)
 					continue
 				}
+				if bytes > 0 && bytes <= 3 { // potentially keep-alive
+					if readBuffer[0] == 0x8d {
+						if s.appConfig.DebugEnabled {
+							log.Printf("%s sending keep alive reply", s.name)
+						}
+						s.writeCh <- keepAliveReply
+					}
+					continue
+				}
 				if s.appConfig.DebugEnabled {
-					log.Printf("%s Rcvd %d bytes data: %s", s.name, bytes, readBuffer)	
-					log.Printf("%s Rcvd %d bytes data: %v", s.name, bytes, readBuffer)	
-				}				
+					log.Printf("%s Rcvd %d bytes data: %s", s.name, bytes, readBuffer)
+					log.Printf("%s Rcvd %d bytes data: %v", s.name, bytes, readBuffer)
+				}
 				log.Printf("%s Rcvd %d bytes", s.name, bytes)
 				retVal, state, err := FindFullTransaction(readBuffer, bytes, &tmpBuffer, &outputLen, tranFoundState, &expectedMsgLen, s.appConfig)
 				tranFoundState = state
@@ -327,9 +337,9 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					continue
 				}
 				log.Printf("%s Pausing to ensure LB is connected to vendor", s.name)
-				if(s.appConfig.WaitAfterConnectSeconds>0){
+				if s.appConfig.WaitAfterConnectSeconds > 0 {
 					time.Sleep(time.Duration(s.appConfig.WaitAfterConnectSeconds) * time.Second)
-				}				
+				}
 				s.setConnected(true)
 			}
 		}
@@ -488,7 +498,7 @@ func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *
 
 func (s *TlsSession) reconnect(splitHandshake bool) error {
 	log.Printf("%s connect connecting to '%s' Pbm Certificate Insecure Skip Verify: %t splitHandshake: %t", s.name, s.address, s.appConfig.PbmInsecureSkipVerify, splitHandshake)
-		start := time.Now() // Capture the start time
+	start := time.Now() // Capture the start time
 	if splitHandshake { // split call using tcp then tls - in order to configure keep-alive
 		// create dialer with keep-alive and connect time-out
 		timeout := 5 * time.Second
@@ -512,7 +522,7 @@ func (s *TlsSession) reconnect(splitHandshake bool) error {
 			return err
 		}
 		remoteAddr := conn.RemoteAddr().(*net.TCPAddr)
-		log.Printf("%s connect connecting to '%s'(%s:%d)  handshake success", s.name, s.address,remoteAddr.IP,remoteAddr.Port)
+		log.Printf("%s connect connecting to '%s'(%s:%d)  handshake success", s.name, s.address, remoteAddr.IP, remoteAddr.Port)
 		// After a successful handshake, set the read deadline to "never"
 		conn.SetReadDeadline(time.Time{})
 		s.mu.Lock()
@@ -529,7 +539,7 @@ func (s *TlsSession) reconnect(splitHandshake bool) error {
 		s.mu.Unlock()
 	}
 	elapsed := time.Since(start) // Calculate elapsed time
-	log.Printf("%s connect ok tls handshake duration: %d ms url: %s", s.name,elapsed.Milliseconds(), s.address)
+	log.Printf("%s connect ok tls handshake duration: %d ms url: %s", s.name, elapsed.Milliseconds(), s.address)
 	return nil
 }
 
@@ -654,7 +664,7 @@ func (ctx *TlsContext) FindLeastBusyChnl() (*TlsSession, int, error) {
 		}
 		outstanding := s.activeClaims.Load()
 		if s.appConfig.DebugEnabled {
-			log.Printf("%s active claims chhl: %d activeClaims: %d ", s.name,s.chnl,s.activeClaims)
+			log.Printf("%s active claims chhl: %d activeClaims: %d ", s.name, s.chnl, s.activeClaims)
 		}
 
 		if outstanding < minClaims {
