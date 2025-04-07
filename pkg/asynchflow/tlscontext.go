@@ -239,26 +239,6 @@ func (ctx *TlsContext) StartMonitoring(threshold int, interval time.Duration) {
 	}()
 }
 
-// func (ctx *TlsContext) StartMonitoring(threshold int, interval time.Duration) {
-// 	go func() {
-// 		for {
-// 			time.Sleep(interval)
-// 			ctx.mu.Lock()
-// 			for i, session := range ctx.sessions {
-// 				session.mu.Lock()
-// 				if session.errors > threshold {
-// 					session.mu.Unlock()
-// 					log.Printf("%s monitor thread threshold reached current: %d threshold: %d", session.name, session.errors, threshold)
-// 					ctx.DisconnectSession(i)
-// 				} else {
-// 					session.mu.Unlock()
-// 				}
-// 			}
-// 			ctx.mu.Unlock()
-// 		}
-// 	}()
-// }
-
 // handleConnection handles reading and writing for a TLS session.
 func (s *TlsSession) handleConnection(ctx *TlsContext) {
 	readBuffer := make([]byte, PBM_DATA_BUFFER)
@@ -268,8 +248,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 	tranFoundState := NoData
 	outputLen := 0      // Current number of valid bytes in output
 	expectedMsgLen := 0 // if ASCII len
-	var keepAliveReply = []byte{0x8d}
-
+	
 	go func() {
 		for {
 			if s.IsConnected() {
@@ -284,20 +263,12 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 					time.Sleep(1 * time.Second)
 					continue
 				}
-				if bytes > 0 && bytes <= 3 { // potentially keep-alive
-					if readBuffer[0] == 0x8d {
-						if s.appConfig.DebugEnabled {
-							log.Printf("%s sending keep alive reply", s.name)
-						}
-						s.writeCh <- keepAliveReply
-					}
-					continue
-				}
 				if s.appConfig.DebugEnabled {
-					log.Printf("%s Rcvd %d bytes data: %s", s.name, bytes, readBuffer)
-					log.Printf("%s Rcvd %d bytes data: %v", s.name, bytes, readBuffer)
+					//log.Printf("%s Rcvd %d bytes data: %s", s.name, bytes, readBuffer)
+					log.Printf("%s Rcvd %d bytes data: %s", s.name, bytes, readBuffer[:bytes])
+				} else {
+					log.Printf("%s Rcvd %d bytes", s.name, bytes)
 				}
-				log.Printf("%s Rcvd %d bytes", s.name, bytes)
 				retVal, state, err := FindFullTransaction(readBuffer, bytes, &tmpBuffer, &outputLen, tranFoundState, &expectedMsgLen, s.appConfig)
 				tranFoundState = state
 				if err != nil {
