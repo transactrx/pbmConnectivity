@@ -2,11 +2,13 @@ package tlssynch
 
 import (
 	"crypto/tls"
-	"github.com/transactrx/ncpdpDestination/pkg/pbmlib"
 	"log"
+	"math"
 	"net"
 	"strconv"
 	"time"
+
+	"github.com/transactrx/ncpdpDestination/pkg/pbmlib"
 )
 
 func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte, map[string][]string, pbmlib.ErrorInfo) {
@@ -20,15 +22,25 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 	sessionLogin := "none"
 	loginData := ""
 	isSessionLoggedIn := false
+	skipFirstTwoBytes := false
+	var site *Site = nil 
 
 	if values, ok := header["transmissionId"]; ok && len(values) > 0 {
 		tid = values[0]
 	}
 	if values, ok := header["urlOverride"]; ok && len(values) > 0 {
-		urlOverride = values[0]
+		urlOverride = values[0]		
+	}else{
+		urlOverride,site  = GetNextUrl()
+		if len(urlOverride)>0 && site !=nil {
+			defer site.activeClaims.Add(-1)
+		}
 	}
 	if values, ok := header["sessionLogin"]; ok && len(values) > 0 {
 		sessionLogin = values[0]
+		if sessionLogin == "skipFirstTwoBytes" {
+			skipFirstTwoBytes = true
+		}
 	}
 	if values, ok := header["loginData"]; ok && len(values) > 0 {
 		loginData = values[0]
@@ -48,7 +60,8 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 				return nil, nil, err
 			}
 		}
-		responseBuffer, bytesRead, err = SubmitRequest(string(claim), tid, conn, timeOut) // TODO read from env variables
+
+		responseBuffer, bytesRead, err = SubmitRequest(string(claim), tid, conn, timeOut,skipFirstTwoBytes) // TODO read from env variables
 		if bytesRead <= 0 {
 			log.Printf("tlssynch.post tid: %s SubmitRequest failed, error: %s", tid, err.Message)
 			return responseBuffer, nil, err
@@ -56,6 +69,36 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 	}
 	log.Printf("tlssynch.post tid: %s responsedata(16): %.16s", tid, responseBuffer)
 	return responseBuffer, nil, pbmlib.ErrorCode.TRX00
+}
+
+func GetNextUrl() (string, *Site) {
+	url := ""
+	var selectedSite *Site = nil
+
+	if len(Sites) == 0 {
+		return url, selectedSite
+	}
+
+	// Set minClaims to max int32 or int64 depending on your atomic type
+	minClaims := int32(math.MaxInt32)
+
+	for i := 0; i < len(Sites); i++ {
+		site := &Sites[i]
+		if site.Active {
+			claims := site.activeClaims.Load() // returns int32 or int64
+			if claims < minClaims {
+				minClaims = claims
+				selectedSite = site
+			}
+		}
+	}
+
+	if selectedSite != nil {
+		url = selectedSite.URL
+		selectedSite.activeClaims.Add(1)
+	}
+
+	return url, selectedSite
 }
 
 func Connect(tid string, urlOverride string) (net.Conn, pbmlib.ErrorInfo) {
@@ -116,18 +159,12 @@ func Connect(tid string, urlOverride string) (net.Conn, pbmlib.ErrorInfo) {
 	return tlsConn, pbmlib.ErrorCode.TRX00
 }
 
-func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duration) ([]byte, int, pbmlib.ErrorInfo) {
+func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duration,skipFirstTwoBytes bool) ([]byte, int, pbmlib.ErrorInfo) {
 
+	//var keepAlive = []byte{0x02,0x30}
 	peerAddr := conn.RemoteAddr().String()
-
 	defer conn.Close()
-
-	log.Printf("tlssynch.submitRequest tid: %s data(16) %.16s time-out value: %f seconds url: %s", tid, claim, timeout.Seconds(), peerAddr)
-	// Set a read deadline for the connection
-	//conn.SetReadDeadline(time.Now().Add(timeout))
-	// Send a message to the server
-	//log.Printf("SLEEPING 200 mseconds")
-	//time.Sleep(300 * time.Millisecond)
+	log.Printf("tlssynch.submitRequest tid: %s data(16) %.16s time-out value: %f seconds url: %s skipData: %t", tid, claim, timeout.Seconds(), peerAddr,skipFirstTwoBytes)
 	bytes, err := conn.Write([]byte(claim))
 	if err != nil {
 		log.Printf("tlssynch.submitRequest tid: %s Write data error: '%s'", tid, err)
@@ -135,11 +172,7 @@ func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duratio
 	} else {
 		log.Printf("tlssynch.submitRequest tid: %s Write Snd %d bytes OK", tid, bytes)
 	}
-	//log.Printf("tlssynch.submitRequest tls.Write %s",string(claim))
-	//log.Printf("tlssynch.submitRequest tls.Write %v",claim)
-
-	// Receive and print the response from the server
-	buffer := make([]byte, PBM_DATA_BUFFER)
+	buffer := make([]byte, PBM_DATA_BUFFER)	
 	conn.SetReadDeadline(time.Now().Add(timeout))
 	bytesRead, err := conn.Read(buffer)
 	if err != nil {
@@ -155,6 +188,7 @@ func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duratio
 			return nil, 0, pbmlib.ErrorCode.TRX10
 		}
 	}
+//	log.Printf("tlssynch.submitRequest data: %x",buffer[:bytesRead])
 	log.Printf("tlssynch.submitRequest tid: %s Rcvd: %d bytes", tid, bytesRead)
 	responseBuffer := make([]byte, bytesRead)
 	copy(responseBuffer, buffer[:bytesRead])
