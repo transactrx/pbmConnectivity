@@ -12,26 +12,24 @@ type TLSSyncConnect struct {
 	test string
 }
 type Config struct {
-	PbmUrl                string
-	PbmPort               string
-	PbmReceiveTimeOut     string
-	PbmInsecureSkipVerify bool
-	TlsSplitHandshake     bool
-	PbmUrls               []string
-	PbmActiveSites        []bool
-	PauseSiteIfFailureHigherThan int 
-	
-	
+	PbmUrl                       string
+	PbmPort                      string
+	PbmReceiveTimeOut            string
+	PbmInsecureSkipVerify        bool
+	TlsSplitHandshake            bool
+	PbmUrls                      []string
+	PbmActiveSites               []bool
+	PauseSiteIfFailureHigherThan int
 }
 type Site struct {
-	URL    string
-	Active bool
-	activeClaims atomic.Int32 // Tracks # of claims awaiting responses
-	failedClaims  atomic.Int32
-	Paused bool
-	pauseCount    int           // number of consecutive pauses
-	lastPausedTime time.Time    // timestamp of the last pause
-	failureRate float64
+	URL            string
+	Active         bool
+	activeClaims   atomic.Int32 // Tracks # of claims awaiting responses
+	failedClaims   atomic.Int32
+	Paused         bool
+	pauseCount     int       // number of consecutive pauses
+	lastPausedTime time.Time // timestamp of the last pause
+	failureRate    float64
 }
 
 const PBM_DATA_BUFFER = 16384
@@ -40,7 +38,7 @@ var Cfg Config
 
 var Sites []Site
 
-func SetupSites()  {
+func SetupSites() {
 	activeSite := false
 	Sites = make([]Site, len(Cfg.PbmUrls))
 	// Initialize sites based on parsed URLs
@@ -85,14 +83,14 @@ func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
 		//pc.Cfg.PbmQueueTimeOut = tmp
 	} else {
 		log.Printf("Start site(s) status not Provided failed")
-	}	
+	}
 
 	SetupSites()
 
 	tmp, ok = cfgMap["PauseSiteIfFailureHigherThan"].(string)
 	Cfg.PauseSiteIfFailureHigherThan = 80
 	if ok {
-		Cfg.PauseSiteIfFailureHigherThan,_ = strconv.Atoi(tmp)
+		Cfg.PauseSiteIfFailureHigherThan, _ = strconv.Atoi(tmp)
 	} else {
 		log.Printf("Start PauseSiteIfFailureHigherThan not Provided failed")
 	}
@@ -127,16 +125,19 @@ func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
 	}
 
 	tmpBool, ok = cfgMap["TlsSplitHandshake"].(bool)
-	Cfg.TlsSplitHandshake =true
+	Cfg.TlsSplitHandshake = true
 
 	if ok1 {
 		Cfg.TlsSplitHandshake = tmpBool
 
 	} else {
-		log.Printf("TlsSplitHandshake not Provided - default to true")	
+		log.Printf("TlsSplitHandshake not Provided - default to true")
 	}
-	log.Printf("Start: configuration: %v",Cfg)
-	StartSiteResetMonitor()
+	log.Printf("Start: configuration: %v", Cfg)
+	if Cfg.PauseSiteIfFailureHigherThan > 0 {
+		StartSiteResetMonitor()
+	}
+
 	return nil
 
 }
