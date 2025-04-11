@@ -2,8 +2,10 @@ package tlssynch
 
 import (
 	"log"
+	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 )
 
 type TLSSyncConnect struct {
@@ -17,11 +19,19 @@ type Config struct {
 	TlsSplitHandshake     bool
 	PbmUrls               []string
 	PbmActiveSites        []bool
+	PauseSiteIfFailureHigherThan int 
+	
+	
 }
 type Site struct {
 	URL    string
 	Active bool
 	activeClaims atomic.Int32 // Tracks # of claims awaiting responses
+	failedClaims  atomic.Int32
+	Paused bool
+	pauseCount    int           // number of consecutive pauses
+	lastPausedTime time.Time    // timestamp of the last pause
+	failureRate float64
 }
 
 const PBM_DATA_BUFFER = 16384
@@ -79,6 +89,13 @@ func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
 
 	SetupSites()
 
+	tmp, ok = cfgMap["PauseSiteIfFailureHigherThan"].(string)
+	Cfg.PauseSiteIfFailureHigherThan = 80
+	if ok {
+		Cfg.PauseSiteIfFailureHigherThan,_ = strconv.Atoi(tmp)
+	} else {
+		log.Printf("Start PauseSiteIfFailureHigherThan not Provided failed")
+	}
 
 	tmp, ok = cfgMap["pbmUrl"].(string)
 	if ok {
@@ -119,6 +136,7 @@ func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
 		log.Printf("TlsSplitHandshake not Provided - default to true")	
 	}
 	log.Printf("Start: configuration: %v",Cfg)
+	StartSiteResetMonitor()
 	return nil
 
 }
