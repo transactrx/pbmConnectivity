@@ -23,16 +23,16 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 	loginData := ""
 	isSessionLoggedIn := false
 	skipFirstTwoBytes := false
-	var site *Site = nil 
+	var site *Site = nil
 
 	if values, ok := header["transmissionId"]; ok && len(values) > 0 {
 		tid = values[0]
 	}
 	if values, ok := header["urlOverride"]; ok && len(values) > 0 {
-		urlOverride = values[0]		
-	}else{
-		urlOverride,site  = GetNextUrl()
-		if len(urlOverride)>0 && site !=nil {
+		urlOverride = values[0]
+	} else {
+		urlOverride, site = GetNextUrl()
+		if len(urlOverride) > 0 && site != nil {
 			defer site.activeClaims.Add(-1)
 		}
 	}
@@ -49,6 +49,9 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 	if err != pbmlib.ErrorCode.TRX00 {
 
 		log.Printf("tlssynch.Post tid: %s Connect failed, error: '%s'", tid, err.Message)
+		if site != nil {
+			site.failedClaims.Add(1)
+		}
 		return nil, nil, err
 	} else {
 		if sessionLogin == "sendLoginData" {
@@ -61,44 +64,17 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 			}
 		}
 
-		responseBuffer, bytesRead, err = SubmitRequest(string(claim), tid, conn, timeOut,skipFirstTwoBytes) // TODO read from env variables
+		responseBuffer, bytesRead, err = SubmitRequest(string(claim), tid, conn, timeOut, skipFirstTwoBytes) // TODO read from env variables
 		if bytesRead <= 0 {
 			log.Printf("tlssynch.post tid: %s SubmitRequest failed, error: %s", tid, err.Message)
+			if site != nil {
+				site.failedClaims.Add(1)
+			}
 			return responseBuffer, nil, err
 		}
 	}
 	log.Printf("tlssynch.post tid: %s responsedata(16): %.16s", tid, responseBuffer)
 	return responseBuffer, nil, pbmlib.ErrorCode.TRX00
-}
-
-func GetNextUrl() (string, *Site) {
-	url := ""
-	var selectedSite *Site = nil
-
-	if len(Sites) == 0 {
-		return url, selectedSite
-	}
-
-	// Set minClaims to max int32 or int64 depending on your atomic type
-	minClaims := int32(math.MaxInt32)
-
-	for i := 0; i < len(Sites); i++ {
-		site := &Sites[i]
-		if site.Active {
-			claims := site.activeClaims.Load() // returns int32 or int64
-			if claims < minClaims {
-				minClaims = claims
-				selectedSite = site
-			}
-		}
-	}
-
-	if selectedSite != nil {
-		url = selectedSite.URL
-		selectedSite.activeClaims.Add(1)
-	}
-
-	return url, selectedSite
 }
 
 func Connect(tid string, urlOverride string) (net.Conn, pbmlib.ErrorInfo) {
@@ -143,28 +119,28 @@ func Connect(tid string, urlOverride string) (net.Conn, pbmlib.ErrorInfo) {
 				conn.Close()
 			}
 			return nil, pbmlib.ErrorCode.TRX03
-		}		
+		}
 	} else {
-		
+
 		tlsConn, err = tls.Dial("tcp", address, tlsConfig)
 		if err != nil {
 			log.Printf("tlssynch.connect tid: %s failed, error: '%s'", tid, err)
 			return nil, pbmlib.ErrorCode.TRX02
 		}
-		
+
 	}
 	elapsed := time.Since(start) // Calculate elapsed time
-	log.Printf("tlssynch.connect tid: %s ok tls handshake duration: %d ms url: %s", tid, elapsed.Milliseconds(),address)
+	log.Printf("tlssynch.connect tid: %s ok tls handshake duration: %d ms url: %s", tid, elapsed.Milliseconds(), address)
 	//log.Printf("tlssynch.connect tid: %s tls handshake duration: %d ms url: %s", tid,elapsed.Milliseconds(),address)
 	return tlsConn, pbmlib.ErrorCode.TRX00
 }
 
-func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duration,skipFirstTwoBytes bool) ([]byte, int, pbmlib.ErrorInfo) {
+func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duration, skipFirstTwoBytes bool) ([]byte, int, pbmlib.ErrorInfo) {
 
 	//var keepAlive = []byte{0x02,0x30}
 	peerAddr := conn.RemoteAddr().String()
 	defer conn.Close()
-	log.Printf("tlssynch.submitRequest tid: %s data(16) %.16s time-out value: %f seconds url: %s skipData: %t", tid, claim, timeout.Seconds(), peerAddr,skipFirstTwoBytes)
+	log.Printf("tlssynch.submitRequest tid: %s data(16) %.16s time-out value: %f seconds url: %s skipData: %t", tid, claim, timeout.Seconds(), peerAddr, skipFirstTwoBytes)
 	bytes, err := conn.Write([]byte(claim))
 	if err != nil {
 		log.Printf("tlssynch.submitRequest tid: %s Write data error: '%s'", tid, err)
@@ -172,7 +148,7 @@ func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duratio
 	} else {
 		log.Printf("tlssynch.submitRequest tid: %s Write Snd %d bytes OK", tid, bytes)
 	}
-	buffer := make([]byte, PBM_DATA_BUFFER)	
+	buffer := make([]byte, PBM_DATA_BUFFER)
 	conn.SetReadDeadline(time.Now().Add(timeout))
 	bytesRead, err := conn.Read(buffer)
 	if err != nil {
@@ -188,7 +164,7 @@ func SubmitRequest(claim string, tid string, conn net.Conn, timeout time.Duratio
 			return nil, 0, pbmlib.ErrorCode.TRX10
 		}
 	}
-//	log.Printf("tlssynch.submitRequest data: %x",buffer[:bytesRead])
+	//	log.Printf("tlssynch.submitRequest data: %x",buffer[:bytesRead])
 	log.Printf("tlssynch.submitRequest tid: %s Rcvd: %d bytes", tid, bytesRead)
 	responseBuffer := make([]byte, bytesRead)
 	copy(responseBuffer, buffer[:bytesRead])
@@ -221,4 +197,122 @@ func SubmitLoginData(loginData string, tid string, conn net.Conn, timeout time.D
 	log.Printf("tlssynch.SubmitLoginData tid: %s Rcvd: %d bytes data(16) %.16X", tid, bytesRead, buffer)
 
 	return retValue, bytesRead, pbmlib.ErrorCode.TRX00
+}
+
+func EvaluateSiteHealth() {
+	activeCount := 0
+	var pausable []*Site	
+	var failureRate float64
+
+	// First pass: count active sites and identify pausable ones
+	for i := range Sites {
+		site := &Sites[i]
+		claims := site.activeClaims.Load()
+		failures := site.failedClaims.Load()
+
+		if site.Active && !site.Paused {
+			activeCount++
+		}
+
+		if claims >= 10 && !site.Paused {
+			failureRate = float64(failures) / float64(claims)
+			if failureRate > float64(Cfg.PauseSiteIfFailureHigherThan) {
+				site.failureRate = failureRate // Optional: store for log clarity
+				pausable = append(pausable, site)
+			}
+		}
+	}
+
+	// Only pause sites if we’ll still have at least one active site remaining
+	for _, site := range pausable {
+		if activeCount <= 1 {
+			break
+		}
+		site.Paused = true
+		site.pauseCount++
+		site.lastPausedTime = time.Now()
+		activeCount-- // Decrement as we pause
+
+		log.Printf(
+			"Pausing site %s due to high failure rate (%.2f%%), backoff level %d.\n",
+			site.URL, site.failureRate*100, site.pauseCount,
+		)
+	}
+
+	// If only 1 or 0 sites are active, unpause all to ensure traffic can continue
+	if activeCount <= 1 {
+		for i := range Sites {
+			site := &Sites[i]
+			if site.Paused {
+				log.Printf("Unpausing site %s as only one site is available.\n", site.URL)
+				site.Paused = false
+				site.pauseCount = 0
+				site.failedClaims.Store(0)
+				site.activeClaims.Store(0)
+			}
+		}
+	}
+}
+
+
+func GetNextUrl() (string, *Site) {
+	url := ""
+	var selectedSite *Site = nil
+
+	if len(Sites) == 0 {
+		return url, selectedSite
+	}
+
+	EvaluateSiteHealth()
+
+	// Set minClaims to max int32 or int64 depending on your atomic type
+	minClaims := int32(math.MaxInt32)
+
+	for i := 0; i < len(Sites); i++ {
+		site := &Sites[i]
+		if site.Active {
+			claims := site.activeClaims.Load() // returns int32 or int64
+			if claims < minClaims {
+				minClaims = claims
+				selectedSite = site
+			}
+		}
+	}
+
+	if selectedSite != nil {
+		url = selectedSite.URL
+		selectedSite.activeClaims.Add(1)
+	}
+
+	return url, selectedSite
+}
+func StartSiteResetMonitor() {
+	go func() {
+		baseBackoff := 2 * time.Minute
+		maxBackoff := 30 * time.Minute
+
+		for {
+			time.Sleep(1 * time.Minute) // check more frequently
+			now := time.Now()
+			for i := range Sites {
+				site := &Sites[i]
+				log.Printf("Site[%d]: %v", i, site)
+
+				site.failedClaims.Store(0)
+				site.activeClaims.Store(0)
+
+				if site.Paused {
+					backoff := baseBackoff * time.Duration(1<<site.pauseCount)
+					if backoff > maxBackoff {
+						backoff = maxBackoff
+					}
+					if now.Sub(site.lastPausedTime) >= backoff {
+						log.Printf("Auto-unpausing site %s after backoff (%v).\n", site.URL, backoff)
+						site.Paused = false
+						site.pauseCount = 0
+					}
+				}
+			}
+		}
+	}()
 }
