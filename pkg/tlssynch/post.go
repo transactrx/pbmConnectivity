@@ -201,7 +201,7 @@ func SubmitLoginData(loginData string, tid string, conn net.Conn, timeout time.D
 
 func EvaluateSiteHealth() {
 	activeCount := 0
-	var pausable []*Site	
+	var pausable []*Site
 	var failureRate float64
 
 	// First pass: count active sites and identify pausable ones
@@ -254,7 +254,6 @@ func EvaluateSiteHealth() {
 	}
 }
 
-
 func GetNextUrl() (string, *Site) {
 	url := ""
 	var selectedSite *Site = nil
@@ -263,7 +262,9 @@ func GetNextUrl() (string, *Site) {
 		return url, selectedSite
 	}
 
-	EvaluateSiteHealth()
+	if Cfg.PauseSiteIfFailureHigherThan > 0 {
+		EvaluateSiteHealth()
+	}
 
 	// Set minClaims to max int32 or int64 depending on your atomic type
 	minClaims := int32(math.MaxInt32)
