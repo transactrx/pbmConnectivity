@@ -248,7 +248,6 @@ func EvaluateSiteHealth() {
 				site.Paused = false
 				site.pauseCount = 0
 				site.failedClaims.Store(0)
-				site.activeClaims.Store(0)
 			}
 		}
 	}
