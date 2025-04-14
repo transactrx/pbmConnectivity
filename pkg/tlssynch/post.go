@@ -255,28 +255,51 @@ func EvaluateSiteHealth() {
 }
 
 func GetNextUrl() (string, *Site) {
-	url := ""
-	var selectedSite *Site = nil
+	var (
+		url          string
+		selectedSite *Site
+	)
 
 	if len(Sites) == 0 {
-		return url, selectedSite
+		return "", nil
 	}
 
 	if Cfg.PauseSiteIfFailureHigherThan > 0 {
 		EvaluateSiteHealth()
 	}
 
-	// Set minClaims to max int32 or int64 depending on your atomic type
-	minClaims := int32(math.MaxInt32)
+	var (
+		bestClaims     = int32(math.MaxInt32)
+		bestFailures   = int32(math.MaxInt32)
+		bestFailPct    = float64(1.0) // 100%
+	)
 
 	for i := 0; i < len(Sites); i++ {
 		site := &Sites[i]
-		if site.Active {
-			claims := site.activeClaims.Load() // returns int32 or int64
-			if claims < minClaims {
-				minClaims = claims
-				selectedSite = site
-			}
+		if !site.Active {
+			continue
+		}
+
+		claims := site.activeClaims.Load()
+		failures := site.failedClaims.Load()
+		total := claims + failures
+
+		var failPct float64
+		if total > 0 {
+			failPct = float64(failures) / float64(total)
+		} else {
+			failPct = 0.0
+		}
+
+		// Primary: least claims, then failure pct, then raw failures
+		if claims < bestClaims ||
+			(claims == bestClaims && failPct < bestFailPct) ||
+			(claims == bestClaims && failPct == bestFailPct && failures < bestFailures) {
+
+			bestClaims = claims
+			bestFailures = failures
+			bestFailPct = failPct
+			selectedSite = site
 		}
 	}
 
@@ -287,6 +310,7 @@ func GetNextUrl() (string, *Site) {
 
 	return url, selectedSite
 }
+
 func StartSiteResetMonitor() {
 	go func() {
 		baseBackoff := 2 * time.Minute
@@ -301,6 +325,7 @@ func StartSiteResetMonitor() {
 
 				site.failedClaims.Store(0)
 				site.activeClaims.Store(0)
+				site.failureRate = 0 
 
 				if site.Paused {
 					backoff := baseBackoff * time.Duration(1<<site.pauseCount)
