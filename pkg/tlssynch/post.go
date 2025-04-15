@@ -215,12 +215,13 @@ func EvaluateSiteHealth() {
 		}
 
 		if claims >= 10 && !site.Paused {
-			failureRate = float64(failures) / float64(claims)
+			failureRate = (float64(failures) / float64(claims)) * 100
 			if failureRate > float64(Cfg.PauseSiteIfFailureHigherThan) {
 				site.failureRate = failureRate // Optional: store for log clarity
 				pausable = append(pausable, site)
 			}
 		}
+
 	}
 
 	// Only pause sites if we’ll still have at least one active site remaining
@@ -232,11 +233,7 @@ func EvaluateSiteHealth() {
 		site.pauseCount++
 		site.lastPausedTime = time.Now()
 		activeCount-- // Decrement as we pause
-
-		log.Printf(
-			"Pausing site %s due to high failure rate (%.2f%%), backoff level %d.\n",
-			site.URL, site.failureRate*100, site.pauseCount,
-		)
+		log.Printf("Pausing site %s due to high failure rate (%.2f%%), backoff level %d.\n",site.URL, site.failureRate*100, site.pauseCount)
 	}
 
 	// If only 1 or 0 sites are active, unpause all to ensure traffic can continue
@@ -268,9 +265,9 @@ func GetNextUrl() (string, *Site) {
 	}
 
 	var (
-		bestClaims     = int32(math.MaxInt32)
-		bestFailures   = int32(math.MaxInt32)
-		bestFailPct    = float64(1.0) // 100%
+		bestClaims   = int32(math.MaxInt32)
+		bestFailures = int32(math.MaxInt32)
+		bestFailPct  = float64(1.0) // 100%
 	)
 
 	for i := 0; i < len(Sites); i++ {
@@ -324,7 +321,7 @@ func StartSiteResetMonitor() {
 
 				site.failedClaims.Store(0)
 				site.activeClaims.Store(0)
-				site.failureRate = 0 
+				site.failureRate = 0
 
 				if site.Paused {
 					backoff := baseBackoff * time.Duration(1<<site.pauseCount)
