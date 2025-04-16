@@ -88,7 +88,7 @@ func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
 	SetupSites()
 
 	tmp, ok = cfgMap["PauseSiteIfFailureHigherThan"].(string)
-	Cfg.PauseSiteIfFailureHigherThan = 80
+	Cfg.PauseSiteIfFailureHigherThan = 0
 	if ok {
 		Cfg.PauseSiteIfFailureHigherThan, _ = strconv.Atoi(tmp)
 	} else {

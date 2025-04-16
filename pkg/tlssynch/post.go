@@ -31,10 +31,7 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 	if values, ok := header["urlOverride"]; ok && len(values) > 0 {
 		urlOverride = values[0]
 	} else {
-		urlOverride, site = GetNextUrl()
-		if len(urlOverride) > 0 && site != nil {
-			defer site.activeClaims.Add(-1)
-		}
+		urlOverride, site = GetNextUrl()		
 	}
 	if values, ok := header["sessionLogin"]; ok && len(values) > 0 {
 		sessionLogin = values[0]
@@ -52,6 +49,7 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 		if site != nil {
 			site.failedClaims.Add(1)
 		}
+		DecreaseActiveClaims(site)
 		return nil, nil, err
 	} else {
 		if sessionLogin == "sendLoginData" {
@@ -60,6 +58,7 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 			// submit login Data and verify response
 			if !isSessionLoggedIn {
 				log.Printf("tlssynch.Post tid: %s sending session login data failed", tid)
+				DecreaseActiveClaims(site)
 				return nil, nil, err
 			}
 		}
@@ -70,11 +69,20 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 			if site != nil {
 				site.failedClaims.Add(1)
 			}
+			DecreaseActiveClaims(site)
 			return responseBuffer, nil, err
 		}
 	}
 	log.Printf("tlssynch.post tid: %s responsedata(16): %.16s", tid, responseBuffer)
+	DecreaseActiveClaims(site)
 	return responseBuffer, nil, pbmlib.ErrorCode.TRX00
+}
+
+func DecreaseActiveClaims(site *Site) {
+	if site!= nil && site.activeClaims.Load() > 0 {
+		site.activeClaims.Add(-1)
+	}
+
 }
 
 func Connect(tid string, urlOverride string) (net.Conn, pbmlib.ErrorInfo) {
@@ -221,6 +229,11 @@ func EvaluateSiteHealth() {
 				pausable = append(pausable, site)
 			}
 		}
+		if claims < 10 && !site.Paused {
+			if int(failures) > Cfg.PauseSiteIfFailureHigherThan {
+				pausable = append(pausable, site)
+			}
+		}
 
 	}
 
@@ -233,7 +246,7 @@ func EvaluateSiteHealth() {
 		site.pauseCount++
 		site.lastPausedTime = time.Now()
 		activeCount-- // Decrement as we pause
-		log.Printf("Pausing site %s due to high failure rate (%.2f%%), backoff level %d.\n",site.URL, site.failureRate*100, site.pauseCount)
+		log.Printf("Pausing site %s due to high failure rate (%.2f%%), backoff level %d.\n", site.URL, site.failureRate*100, site.pauseCount)
 	}
 
 	// If only 1 or 0 sites are active, unpause all to ensure traffic can continue
@@ -286,6 +299,8 @@ func GetNextUrl() (string, *Site) {
 		} else {
 			failPct = 0.0
 		}
+
+		log.Printf("GetNextUrl site: %s claims: %d bestclaims: %d failpct: %f bestFailPct:%f failures: %d ", site.URL, claims, bestClaims, failPct, bestFailPct, failures)
 
 		// Primary: least claims, then failure pct, then raw failures
 		if claims < bestClaims ||
