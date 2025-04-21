@@ -9,8 +9,7 @@ import (
 	"log"
 	"net"
 	"os"
-
-	//"os"
+	"sync/atomic"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,8 +17,14 @@ import (
 )
 
 type Site struct {
-	URL    string
-	Active bool
+	URL            string
+	Active         bool
+	activeClaims   atomic.Int32 // Tracks # of claims awaiting responses
+	failedClaims   atomic.Int32
+	Paused         bool
+	pauseCount     int       // number of consecutive pauses
+	lastPausedTime time.Time // timestamp of the last pause
+	failureRate    float64
 }
 
 type Response struct {
@@ -42,7 +47,8 @@ type TlsSession struct {
 	tlsConfig *tls.Config
 	appConfig Config
 	chnl      int
-	errors    int
+	errors    atomic.Int32
+	site      *Site
 }
 
 // TlsContext manages multiple TLS sessions.
@@ -139,13 +145,16 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 			tlsConfig: tlsConfig,
 			appConfig: appCfg,
 			chnl:      i,
+			site:      site,
 		}
+
 		ctx.sessions[i] = session
 		go session.handleConnection(ctx) // Pass ctx to handleConnection
 	}
 
 	// Start monitoring with a threshold of 5 errors and a check interval of 10 seconds
 	ctx.StartMonitoring(Cfg.DisconnectFailedCount, 10*time.Second)
+	ctx.StartSiteResetMonitor()
 
 	return ctx, nil
 }
@@ -159,15 +168,13 @@ func (ctx *TlsContext) SetSiteStatus(index int, active bool) {
 }
 
 func (ctx *TlsContext) IncrementError(index int) {
-	ctx.sessions[index].mu.Lock()
-	ctx.sessions[index].errors++
-	ctx.sessions[index].mu.Unlock()
+
+	ctx.sessions[index].site.failedClaims.Add(1)
+	ctx.sessions[index].errors.Add(1)
 }
 
 func (ctx *TlsContext) ClearError(index int) {
-	ctx.sessions[index].mu.Lock()
-	ctx.sessions[index].errors = 0
-	ctx.sessions[index].mu.Unlock()
+	ctx.sessions[index].errors.Store(0)
 }
 
 func (ctx *TlsContext) DisconnectSession(index int) {
@@ -177,8 +184,7 @@ func (ctx *TlsContext) DisconnectSession(index int) {
 	if ctx.sessions[index].connected {
 		ctx.sessions[index].connected = false
 		ctx.sessions[index].tlsConn.Close()
-		ctx.sessions[index].errors = 0 // Reset error count
-		//		close(ctx.sessions[index].closeCh) // Signal close
+		ctx.sessions[index].errors.Store(0)
 	}
 }
 
@@ -189,9 +195,9 @@ func (ctx *TlsContext) StartMonitoring(threshold int, interval time.Duration) {
 			ctx.mu.Lock()
 			for i, session := range ctx.sessions {
 				session.mu.Lock()
-				if session.errors > threshold {
+				if int(session.errors.Load()) > threshold {
 					session.mu.Unlock()
-					log.Printf("%s monitor thread threshold reached current: %d threshold: %d", session.name, session.errors, threshold)
+					log.Printf("%s monitor thread threshold reached current: %d threshold: %d", session.name, session.errors.Load(), threshold)
 					ctx.DisconnectSession(i)
 				} else {
 					session.mu.Unlock()
@@ -326,65 +332,65 @@ func (s Status) String() string {
 }
 
 func FindFullTransactionUseASCIILen(input []byte, inputLen int, output *[]byte, outputLen *int, state Status, expectedMsgLen *int) (bool, Status, error) {
-    headerLen := Cfg.MessageLenWidth
-    headerOffset := Cfg.MessageLenOffset
-    tmpLen := *outputLen + inputLen
+	headerLen := Cfg.MessageLenWidth
+	headerOffset := Cfg.MessageLenOffset
+	tmpLen := *outputLen + inputLen
 
-    if Cfg.DebugEnabled {
-        log.Printf("FindFullTransactionUseASCIILen - expected: %d, outputLen: %d, headerLen: %d, headerOffset: %d, tmpLen: %d", *expectedMsgLen, *outputLen, headerLen, headerOffset, tmpLen)
-    }
+	if Cfg.DebugEnabled {
+		log.Printf("FindFullTransactionUseASCIILen - expected: %d, outputLen: %d, headerLen: %d, headerOffset: %d, tmpLen: %d", *expectedMsgLen, *outputLen, headerLen, headerOffset, tmpLen)
+	}
 
-    // Append the input data to the output buffer
-    if tmpLen > cap(*output) {
-        return false, ParseError, errors.New("output buffer capacity exceeded")
-    }
-    copy((*output)[*outputLen:], input[:inputLen])
-    *outputLen += inputLen
+	// Append the input data to the output buffer
+	if tmpLen > cap(*output) {
+		return false, ParseError, errors.New("output buffer capacity exceeded")
+	}
+	copy((*output)[*outputLen:], input[:inputLen])
+	*outputLen += inputLen
 
-    // Step 1: Ensure the header is fully available
-    if *outputLen < headerOffset+headerLen {
-        if Cfg.DebugEnabled {
-            log.Printf("Not enough data for header - outputLen: %d, required: %d", *outputLen, headerOffset+headerLen)
-        }
-        return false, MoreDataPending, nil
-    }
+	// Step 1: Ensure the header is fully available
+	if *outputLen < headerOffset+headerLen {
+		if Cfg.DebugEnabled {
+			log.Printf("Not enough data for header - outputLen: %d, required: %d", *outputLen, headerOffset+headerLen)
+		}
+		return false, MoreDataPending, nil
+	}
 
-    // Step 2: Parse header to determine expected message length
-    if *expectedMsgLen == 0 {
-        asciiHeader := (*output)[headerOffset : headerOffset+headerLen]
-        expectedLen, err := strconv.Atoi(strings.TrimSpace(string(asciiHeader)))
-        if err != nil || expectedLen <= 0 {
-            return false, ParseError, errors.New("invalid ASCII header length")
-        }
-		if(Cfg.MessageLenType == 0 ){
-			*expectedMsgLen = expectedLen //  cvs case includes full buffer 
-		}else if(Cfg.MessageLenType == 1){
+	// Step 2: Parse header to determine expected message length
+	if *expectedMsgLen == 0 {
+		asciiHeader := (*output)[headerOffset : headerOffset+headerLen]
+		expectedLen, err := strconv.Atoi(strings.TrimSpace(string(asciiHeader)))
+		if err != nil || expectedLen <= 0 {
+			return false, ParseError, errors.New("invalid ASCII header length")
+		}
+		if Cfg.MessageLenType == 0 {
+			*expectedMsgLen = expectedLen //  cvs case includes full buffer
+		} else if Cfg.MessageLenType == 1 {
 			*expectedMsgLen = expectedLen + headerLen //  optumrxsolutions excludes header so need to add to incoming
 		}
 
-        if Cfg.DebugEnabled {
-            log.Printf("Parsed header: expectedMsgLen = %d", *expectedMsgLen)
-        }
-    }
+		if Cfg.DebugEnabled {
+			log.Printf("Parsed header: expectedMsgLen = %d", *expectedMsgLen)
+		}
+	}
 
-    // Step 3: Check if full message has been received
-    if *outputLen >= *expectedMsgLen {
-        if *outputLen > *expectedMsgLen {
-            return false, ParseError, errors.New("extra bytes detected beyond expected length")
-        }
-        return true, TransactionFound, nil
-    }
+	// Step 3: Check if full message has been received
+	if *outputLen >= *expectedMsgLen {
+		if *outputLen > *expectedMsgLen {
+			return false, ParseError, errors.New("extra bytes detected beyond expected length")
+		}
+		return true, TransactionFound, nil
+	}
 
-    // Step 4: Wait for more data
-    remaining := *expectedMsgLen - *outputLen
-    if remaining > 0 {
-        if Cfg.DebugEnabled {
-            log.Printf("Waiting for more data - remaining: %d, outputLen: %d, expectedMsgLen: %d", remaining, *outputLen, *expectedMsgLen)
-        }
-        return false, MoreDataPending, nil
-    }
+	// Step 4: Wait for more data
+	remaining := *expectedMsgLen - *outputLen
+	if remaining > 0 {
+		if Cfg.DebugEnabled {
+			log.Printf("Waiting for more data - remaining: %d, outputLen: %d, expectedMsgLen: %d", remaining, *outputLen, *expectedMsgLen)
+		}
+		return false, MoreDataPending, nil
+	}
 
-    return false, ParseError, errors.New("unexpected condition encountered")
+	return false, ParseError, errors.New("unexpected condition encountered")
 }
 
 // FindFullTransaction processes input bytes and updates the output with complete transactions.
@@ -553,12 +559,15 @@ func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
 	const retryInterval = 100 * time.Millisecond
 
 	startTime := time.Now()
+	if Cfg.PauseSiteIfFailureHigherThan > 0 {
+		ctx.EvaluateSiteHealth()
+	}
 
 	for {
 		ctx.mu.Lock()
 		for i := 0; i < len(ctx.sessions); i++ {
 			index := (ctx.lastUsed + i) % len(ctx.sessions)
-			if !ctx.bitmap[index] && ctx.sessions[index].IsConnected() {
+			if !ctx.bitmap[index] && ctx.sessions[index].IsConnected() && !ctx.sessions[index].site.Paused {
 				ctx.bitmap[index] = true
 				ctx.lastUsed = index + 1 // Update the last used index
 				ctx.mu.Unlock()
