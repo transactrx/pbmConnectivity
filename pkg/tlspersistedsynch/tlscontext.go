@@ -568,7 +568,8 @@ func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
 		ctx.mu.Lock()
 		for i := 0; i < len(ctx.sessions); i++ {
 			index := (ctx.lastUsed + i) % len(ctx.sessions)
-			if !ctx.bitmap[index] && ctx.sessions[index].IsConnected() && !ctx.sessions[index].site.Paused {
+			site := ctx.sessions[index].site
+			if !ctx.bitmap[index] && ctx.sessions[index].IsConnected() && !site.IsPaused() {
 				ctx.bitmap[index] = true
 				ctx.lastUsed = index + 1 // Update the last used index
 				ctx.mu.Unlock()

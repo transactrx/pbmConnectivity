@@ -62,6 +62,13 @@ func (ctx *TlsContext) EvaluateSiteHealth() {
 	}
 }
 
+func (s *Site) IsPaused() bool {
+    if s == nil {
+        return false // default to "not paused"
+    }
+    return s.Paused
+}
+
 func (ctx *TlsContext) StartSiteResetMonitor() {
 	go func() {
 		baseBackoff := 2 * time.Minute
