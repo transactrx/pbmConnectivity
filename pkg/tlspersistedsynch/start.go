@@ -33,6 +33,7 @@ type Config struct {
 	MessageLenType int 	// 0 - default - includes header itself 
 						// 1 - skipheader - excludes header 
 	DisconnectFailedCount int 						
+	PauseSiteIfFailureHigherThan int
 }
 
 const PBM_DATA_BUFFER = 16384
@@ -222,6 +223,14 @@ func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 		log.Printf("DisconnectFailedCount not Provided failed")
 	}
 
+	tmp, ok = cfgMap["PauseSiteIfFailureHigherThan"].(string)
+	Cfg.PauseSiteIfFailureHigherThan = 0
+	if ok {
+		Cfg.PauseSiteIfFailureHigherThan, _ = strconv.Atoi(tmp)
+	} else {
+		log.Printf("Start PauseSiteIfFailureHigherThan not Provided failed")
+	}
+	
 	PrintStructFieldsAndValues(Cfg)
 	
 	// run TlsContext
