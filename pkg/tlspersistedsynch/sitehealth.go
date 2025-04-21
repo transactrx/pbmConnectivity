@@ -2,7 +2,6 @@ package tlspersistedsynch
 
 import (
 	"log"
-	"math"
 	"time"
 )
 
@@ -61,65 +60,6 @@ func (ctx *TlsContext) EvaluateSiteHealth() {
 			}
 		}
 	}
-}
-
-func (ctx *TlsContext) GetNextUrl() (string, *Site) {
-	var (
-		url          string
-		selectedSite *Site
-	)
-
-	if len(ctx.sites) == 0 {
-		return "", nil
-	}
-
-	if Cfg.PauseSiteIfFailureHigherThan > 0 {
-		ctx.   EvaluateSiteHealth()
-	}
-
-	var (
-		bestClaims   = int32(math.MaxInt32)
-		bestFailures = int32(math.MaxInt32)
-		bestFailPct  = float64(1.0) // 100%
-	)
-
-	for i := 0; i < len(ctx.sites); i++ {
-		site := ctx.sites[i]
-		if !site.Active {
-			continue
-		}
-
-		claims := site.activeClaims.Load()
-		failures := site.failedClaims.Load()
-		total := claims + failures
-
-		var failPct float64
-		if total > 0 {
-			failPct = float64(failures) / float64(total)
-		} else {
-			failPct = 0.0
-		}
-
-		log.Printf("GetNextUrl site: %s claims: %d bestclaims: %d failpct: %f bestFailPct:%f failures: %d ", site.URL, claims, bestClaims, failPct, bestFailPct, failures)
-
-		// Primary: least claims, then failure pct, then raw failurlog
-		if claims < bestClaims ||
-			(claims == bestClaims && failPct < bestFailPct) ||
-			(claims == bestClaims && failPct == bestFailPct && failures < bestFailures) {
-
-			bestClaims = claims
-			bestFailures = failures
-			bestFailPct = failPct
-			selectedSite = site
-		}
-	}
-
-	if selectedSite != nil {
-		url = selectedSite.URL
-		selectedSite.activeClaims.Add(1)
-	}
-
-	return url, selectedSite
 }
 
 func (ctx *TlsContext) StartSiteResetMonitor() {

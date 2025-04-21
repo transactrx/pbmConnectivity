@@ -154,8 +154,9 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 
 	// Start monitoring with a threshold of 5 errors and a check interval of 10 seconds
 	ctx.StartMonitoring(Cfg.DisconnectFailedCount, 10*time.Second)
-	ctx.StartSiteResetMonitor()
-
+	if Cfg.PauseSiteIfFailureHigherThan > 0 {
+		ctx.StartSiteResetMonitor()
+	}
 	return ctx, nil
 }
 
