@@ -21,6 +21,7 @@ func (ctx *TlsContext) EvaluateSiteHealth() {
 			activeCount++
 		}
 
+		log.Printf("url: %s claims: %d paused: %t failures: %d Cfg.PauseSiteIfFailureHigherThan: %d",site.URL,claims,site.Paused,failures,Cfg.PauseSiteIfFailureHigherThan)
 		if claims >= 10 && !site.Paused {
 			failureRate = (float64(failures) / float64(claims)) * 100
 			if failureRate > float64(Cfg.PauseSiteIfFailureHigherThan) {
@@ -35,31 +36,7 @@ func (ctx *TlsContext) EvaluateSiteHealth() {
 		}
 
 	}
-	CheckPausableSites(pausable, &activeCount)
-	// Only pause sites if we’ll still have at least one active site remaining
-	// for _, site := range pausable {
-	// 	if activeCount <= 1 {
-	// 		break
-	// 	}
-	// 	site.Paused = true
-	// 	site.pauseCount++
-	// 	site.lastPausedTime = time.Now()
-	// 	activeCount-- // Decrement as we pause
-	// 	log.Printf("Pausing site %s due to high failure rate (%.2f%%), backoff level %d.\n", site.URL, site.failureRate*100, site.pauseCount)
-	// }
-
-	// If only 1 or 0 sites are active, unpause all to ensure traffic can continue
-	// if activeCount <= 1 {
-	// 	for i := range ctx.sites {
-	// 		site := ctx.sites[i]
-	// 		if site.Paused {
-	// 			log.Printf("Unpausing site %s as only one site is available.\n", site.URL)
-	// 			site.Paused = false
-	// 			site.pauseCount = 0
-	// 			site.failedClaims.Store(0)
-	// 		}
-	// 	}
-	// }
+	CheckPausableSites(pausable, &activeCount)	
 }
 
 func (s *Site) IsPaused() bool {
@@ -106,6 +83,13 @@ func (ctx *TlsContext) CheckSites() {
 }
 
 func CheckPausableSites(pausable []*Site, activeCount *int) {
+
+	if(len(pausable)<=0){
+		return 
+	}
+	if(Cfg.DebugEnabled){
+		log.Printf("CheckPausableSites activeCount:%d pausable sites: %d",*activeCount,len(pausable))
+	}
 	for _, site := range pausable {
 		if *activeCount <= 1 {
 			break
@@ -114,6 +98,6 @@ func CheckPausableSites(pausable []*Site, activeCount *int) {
 		site.pauseCount++
 		site.lastPausedTime = time.Now()
 		*activeCount-- // Decrement as we pause
-		log.Printf("Pausing site %s due to high failure rate (%.2f%%), backoff level %d.\n", site.URL, site.failureRate*100, site.pauseCount)
+		log.Printf("Pausing site %s due to high failure rate (%.2f%%) or max.site failures: %d, backoff level %d.\n", site.URL, site.failureRate*100,site.failedClaims.Load(),site.pauseCount)
 	}
 }
