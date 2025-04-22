@@ -3,8 +3,8 @@ package tlssynch
 import (
 	"log"
 	"sync/atomic"
-	"time"	
-	"github.com/transactrx/pbmoptumsxc/helpers"
+	"time"
+	"github.com/transactrx/pbmConnectivity/pkg/helpers"
 )
 
 type TLSSyncConnect struct {
@@ -38,14 +38,14 @@ var Sites []Site
 func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
 	log.Printf("TLSSyncConnect::Start")
 
-	Cfg.PbmUrls = helpers.getStringSlice(cfgMap, "pbmUrl")
-	Cfg.PbmActiveSites = helpers.getBoolSlice(cfgMap, "pbmActiveSites")
-	Cfg.PbmUrl = helpers.getString(cfgMap, "pbmUrl")
-	Cfg.PbmPort = helpers.getString(cfgMap, "pbmPort")
-	Cfg.PbmReceiveTimeOut = helpers.getString(cfgMap, "pbmReceiveTimeOut")
-	Cfg.PbmInsecureSkipVerify = helpers.getBoolWithDefault(cfgMap, "pbmInsecureSkipVerify", false)
-	Cfg.TlsSplitHandshake = helpers.getBoolWithDefault(cfgMap, "TlsSplitHandshake", true)
-	Cfg.PauseSiteIfFailureHigherThan = helpers.getIntWithDefault(cfgMap, "PauseSiteIfFailureHigherThan", 0)
+	Cfg.PbmUrls = helpers.GetStringSlice(cfgMap, "pbmUrl")
+	Cfg.PbmActiveSites = helpers.GetBoolSlice(cfgMap, "pbmActiveSites")
+	Cfg.PbmUrl = helpers.GetString(cfgMap, "pbmUrl")
+	Cfg.PbmPort = helpers.GetString(cfgMap, "pbmPort")
+	Cfg.PbmReceiveTimeOut = helpers.GetString(cfgMap, "pbmReceiveTimeOut")
+	Cfg.PbmInsecureSkipVerify = helpers.GetBoolWithDefault(cfgMap, "pbmInsecureSkipVerify", false)
+	Cfg.TlsSplitHandshake = helpers.GetBoolWithDefault(cfgMap, "TlsSplitHandshake", true)
+	Cfg.PauseSiteIfFailureHigherThan = helpers.GetIntWithDefault(cfgMap, "PauseSiteIfFailureHigherThan", 0)
 
 	SetupSites()
 
