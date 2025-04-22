@@ -1,21 +1,23 @@
 package https
 
-import "log"
+import (
+	"github.com/transactrx/pbmConnectivity/pkg/helpers"
+	"log"
+)
 
 type HTTPPBMConnect struct {
 	Conf RouteInfo
-		
 }
 
 type Config struct {
-	Routes     []RouteInfo `json:"routes"`
-	DbName     string      `json:"dbName"`
-	DbUserName string      `json:"dbUserName"`
-	DbPassword string      `json:"dbPassword"`
-	DbHost     string      `json:"dbHost"`
-	DBPort     string      `json:"dbPort"`
-	DBSslMode  string      `json:"dbSslMode"`
-	IsDebugMode bool
+	Routes                []RouteInfo `json:"routes"`
+	DbName                string      `json:"dbName"`
+	DbUserName            string      `json:"dbUserName"`
+	DbPassword            string      `json:"dbPassword"`
+	DbHost                string      `json:"dbHost"`
+	DBPort                string      `json:"dbPort"`
+	DBSslMode             string      `json:"dbSslMode"`
+	IsDebugMode           bool
 	PbmUrl                string
 	PbmPort               string
 	PbmReceiveTimeOut     string
@@ -27,7 +29,7 @@ type RouteInfo struct {
 	PbmUrl    string   `json:"pbmUrl"`
 	Headers   []Header `json:"headers"`
 	Timeout   float64  `json:"timeout"`
-//	PbmInsecureSkipVerify bool `json:"certinsecureskipverify"`
+	//	PbmInsecureSkipVerify bool `json:"certinsecureskipverify"`
 }
 type Header struct {
 	Key          string `json:"key"`
@@ -41,53 +43,15 @@ const PBM_DATA_BUFFER = 16384
 var Cfg Config
 
 func (pc *HTTPPBMConnect) Start(cfgMap map[string]interface{}) error {
+	log.Println("HTTPPBMConnect::Start")
 
-	log.Printf("HTTPPBMConnect::Start")
+	Cfg.PbmUrl = helpers.GetString(cfgMap, "pbmUrl")
+	Cfg.PbmPort = helpers.GetString(cfgMap, "pbmPort")
+	Cfg.PbmReceiveTimeOut = helpers.GetString(cfgMap, "pbmReceiveTimeOut")
+	Cfg.PbmInsecureSkipVerify = helpers.GetBool(cfgMap, "pbmInsecureSkipVerify", false)
+	Cfg.TlsSplitHandshake = helpers.GetBool(cfgMap, "TlsSplitHandshake", true)
+	Cfg.IsDebugMode = helpers.GetBool(cfgMap, "debugEnabled", false)
 
-	tmp, ok := cfgMap["pbmUrl"].(string)
-	if ok {
-		Cfg.PbmUrl = tmp
-	} else {
-		log.Printf("Start Url not Provided failed")
-	}
-	tmp, ok = cfgMap["pbmPort"].(string)
-	if ok {
-		Cfg.PbmPort = tmp
-	} else {
-		log.Printf("Start port not Provided failed")
-	}
-	tmp, ok = cfgMap["pbmReceiveTimeOut"].(string)
-
-	if ok {
-		Cfg.PbmReceiveTimeOut = tmp
-	} else {
-		log.Printf("Start receive time-out not Provided failed")
-	}
-
-	tmpBool, ok1 := cfgMap["pbmInsecureSkipVerify"].(bool)
-
-	if ok1 {
-		Cfg.PbmInsecureSkipVerify = tmpBool
-	} else {
-		log.Printf("PbmInsecureSkipVerify not Provided failed")
-		Cfg.PbmInsecureSkipVerify = false
-	}
-
-	tmpBool, ok = cfgMap["TlsSplitHandshake"].(bool)
-	Cfg.TlsSplitHandshake =true
-	if ok1 {
-		Cfg.TlsSplitHandshake = tmpBool
-	} else {
-		log.Printf("TlsSplitHandshake not Provided - default to true")	
-	}
-	tmpBool, ok1 = cfgMap["debugEnabled"].(bool)
-	if ok1 {
-		Cfg.IsDebugMode= tmpBool
-	} else {
-		log.Printf("debugEnabled not Provided failed...")
-		Cfg.IsDebugMode = false
-	}
-//	Cfg.IsDebugMode = true
 	CreateGlobalHttpContext()
 
 	return nil
