@@ -51,13 +51,20 @@ func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
 
 	log.Printf("Start: configuration: %v", Cfg)
 
-	if Cfg.PauseSiteIfFailureHigherThan > 0 {
+	if IsSiteHealthCheckEnabled() {
 		StartSiteResetMonitor()
 	}
 
 	return nil
 }
 
+func IsSiteHealthCheckEnabled()bool{
+	retValue := false
+	if(len(Cfg.PbmUrls)> 1 && Cfg.PauseSiteIfFailureHigherThan > 0){
+		retValue = true
+	}
+	return retValue
+}
 
 func SetupSites() {
 	activeSite := false

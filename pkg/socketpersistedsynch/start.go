@@ -1,16 +1,17 @@
-package tlspersistedsynch
+package socketpersistedsynch
 
 import (
 	"log"
 	"reflect"
+
 	"github.com/transactrx/pbmConnectivity/pkg/helpers"
 )
 
-type TLSPersistedSyncConnect struct {
+type SocketPersistedSyncConnect struct {
 	test string
 }
 
-var Ctx *TlsContext
+var Ctx *SessionContext
 
 type Config struct {
 	PbmUrl                []string
@@ -39,7 +40,7 @@ const PBM_DATA_BUFFER = 16384
 
 var Cfg Config
 
-func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
+func (pc *SocketPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 
 	var err error
 

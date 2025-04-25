@@ -1,18 +1,17 @@
-package tlspersistedsynch
+package socketpersistedsynch
 
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"log"
 	"net"
 	"os"
-	"sync/atomic"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -33,27 +32,26 @@ type Response struct {
 	status Status
 }
 
-// TlsSession represents a single TLS session.
-type TlsSession struct {
-	name      string
-	address   string
-	tlsConn   *tls.Conn
+// SocketSession represents a single TLS session.
+type SocketSession struct {
+	name    string
+	address string
+	tcpConn   net.Conn
 	readCh    chan []byte
 	readCh1   chan Response
 	writeCh   chan []byte
 	closeCh   chan bool
 	connected bool
 	mu        sync.Mutex
-	tlsConfig *tls.Config
 	appConfig Config
 	chnl      int
 	errors    atomic.Int32
 	site      *Site
 }
 
-// TlsContext manages multiple TLS sessions.
-type TlsContext struct {
-	sessions  []*TlsSession
+// SessionContext manages multiple TLS sessions.
+type SessionContext struct {
+	sessions  []*SocketSession
 	bitmap    []bool
 	mu        sync.Mutex
 	lastUsed  int
@@ -106,12 +104,12 @@ func createSessionName(i int, siteURL string) string {
 }
 
 // NewTlsContext creates a new TlsContext with predefined sessions.
-func NewTlsContext(appCfg Config) (*TlsContext, error) {
+func NewTlsContext(appCfg Config) (*SessionContext, error) {
 	// Parse the PbmUrl string into a slice of URLs
 	//urls := strings.Split(appCfg.PbmUrl, ",")
 
-	ctx := &TlsContext{
-		sessions: make([]*TlsSession, appCfg.PbmOutboundChnls),
+	ctx := &SessionContext{
+		sessions: make([]*SocketSession, appCfg.PbmOutboundChnls),
 		bitmap:   make([]bool, appCfg.PbmOutboundChnls),
 		sites:    make([]*Site, len(appCfg.PbmUrl)), // Create sites based on the number of URLs
 
@@ -124,17 +122,12 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 		activeSite = Cfg.PbmActiveSites[i]
 		ctx.sites[i] = &Site{URL: url, Active: activeSite}
 	}
-
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: appCfg.PbmInsecureSkipVerify, // You might want to set this to false in production
-	}
-
 	// Assign sessions to sites
 	for i := 0; i < appCfg.PbmOutboundChnls; i++ {
 		site := ctx.sites[i%len(ctx.sites)] // Round-robin assignment of sites
 		addr := site.URL + ":" + appCfg.PbmPort
 
-		session := &TlsSession{
+		session := &SocketSession{
 			name:      createSessionName(i, site.URL),
 			address:   addr,
 			readCh:    make(chan []byte),
@@ -142,7 +135,6 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 			writeCh:   make(chan []byte),
 			closeCh:   make(chan bool),
 			connected: false,
-			tlsConfig: tlsConfig,
 			appConfig: appCfg,
 			chnl:      i,
 			site:      site,
@@ -155,12 +147,12 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 	// Start monitoring with a threshold of 5 errors and a check interval of 10 seconds
 	ctx.StartMonitoring(Cfg.DisconnectFailedCount, 10*time.Second)
 	if IsSiteHealthCheckEnabled() {
-		ctx.StartSiteResetMonitor()
+		ctx.StartSiteResetMonitor(2 * time.Minute)
 	}
 	return ctx, nil
 }
 
-func (ctx *TlsContext) SetSiteStatus(index int, active bool) {
+func (ctx *SessionContext) SetSiteStatus(index int, active bool) {
 	ctx.mu.Lock()
 	defer ctx.mu.Unlock()
 	if index >= 0 && index < len(ctx.sites) {
@@ -168,28 +160,28 @@ func (ctx *TlsContext) SetSiteStatus(index int, active bool) {
 	}
 }
 
-func (ctx *TlsContext) IncrementError(index int) {
+func (ctx *SessionContext) IncrementError(index int) {
 
 	ctx.sessions[index].site.failedClaims.Add(1)
 	ctx.sessions[index].errors.Add(1)
 }
 
-func (ctx *TlsContext) ClearError(index int) {
+func (ctx *SessionContext) ClearError(index int) {
 	ctx.sessions[index].errors.Store(0)
 }
 
-func (ctx *TlsContext) DisconnectSession(index int) {
+func (ctx *SessionContext) DisconnectSession(index int) {
 	ctx.sessions[index].mu.Lock()
 	defer ctx.sessions[index].mu.Unlock()
 
 	if ctx.sessions[index].connected {
 		ctx.sessions[index].connected = false
-		ctx.sessions[index].tlsConn.Close()
+		ctx.sessions[index].tcpConn.Close()
 		ctx.sessions[index].errors.Store(0)
 	}
 }
 
-func (ctx *TlsContext) StartMonitoring(threshold int, interval time.Duration) {
+func (ctx *SessionContext) StartMonitoring(threshold int, interval time.Duration) {
 	go func() {
 		for {
 			time.Sleep(interval)
@@ -210,7 +202,7 @@ func (ctx *TlsContext) StartMonitoring(threshold int, interval time.Duration) {
 }
 
 // handleConnection handles reading and writing for a TLS session.
-func (s *TlsSession) handleConnection(ctx *TlsContext) {
+func (s *SocketSession) handleConnection(ctx *SessionContext) {
 	readBuffer := make([]byte, PBM_DATA_BUFFER)
 	tmpBuffer := make([]byte, PBM_DATA_BUFFER)
 	zeroSlice := make([]byte, len(readBuffer)) // Create a zeroed slice of the same length
@@ -224,7 +216,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 			if s.IsConnected() {
 				log.Printf("%s reading... status: %s", s.name, tranFoundState)
 				copy(readBuffer, zeroSlice) // Copy the zeroed slice into the buffer
-				bytes, err := s.tlsConn.Read(readBuffer)
+				bytes, err := s.tcpConn.Read(readBuffer)
 				if err != nil || bytes <= 0 {
 					// MRG 8.21.24 let the monitor routine disconnect after error count
 					ctx.DisconnectSession(s.chnl)
@@ -282,8 +274,8 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 
 		select {
 		case data := <-s.writeCh:
-			if s.IsConnected() && s.tlsConn != nil {
-				bytes, err := s.tlsConn.Write(data)
+			if s.IsConnected() && s.tcpConn != nil {
+				bytes, err := s.tcpConn.Write(data)
 				if err != nil {
 					log.Printf("%s Write failed: %s", s.name, err)
 					s.setConnected(false)
@@ -297,9 +289,9 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 
 		case <-s.closeCh:
 
-			if s.tlsConn != nil {
+			if s.tcpConn != nil {
 				log.Printf("%s closing connection...", s.name)
-				s.tlsConn.Close()
+				s.tcpConn.Close()
 			} else {
 				log.Printf("%s s.conn.close - conn was null", s.name)
 			}
@@ -435,65 +427,43 @@ func FindFullTransaction(input []byte, inputLen int, output *[]byte, outputLen *
 	return false, MoreDataPending, nil
 }
 
-func (s *TlsSession) reconnect(splitHandshake bool) error {
+func (s *SocketSession) reconnect(splitHandshake bool) error {
 	log.Printf("%s connect connecting to '%s' Pbm Certificate Insecure Skip Verify: %t splitHandshake: %t", s.name, s.address, s.appConfig.PbmInsecureSkipVerify, splitHandshake)
-	if splitHandshake { // split call using tcp then tls - in order to configure keep-alive
-		// create dialer with keep-alive and connect time-out
-		timeout := 5 * time.Second
-		keepAliveInterval := 5 * time.Minute
-		dialer := &net.Dialer{
-			Timeout:   timeout,
-			KeepAlive: keepAliveInterval,
-		}
-		tcpConn, err := dialer.Dial("tcp", s.address)
-		if err != nil {
-			return err
-		}
-		// Wrap the TCP connection in a TLS connection
-		conn := tls.Client(tcpConn, s.tlsConfig)
-		// Perform the TLS handshake using a time out
-		conn.SetReadDeadline(time.Now().Add(timeout))
-		err = conn.Handshake()
-		if err != nil {
-			log.Printf("%s connect connecting to '%s' handshake failed err: %v", s.name, s.address, err)
-			tcpConn.Close()
-			return err
-		}
-		log.Printf("%s connect connecting to '%s' handshake success", s.name, s.address)
-		// After a successful handshake, set the read deadline to "never"
-		conn.SetReadDeadline(time.Time{})
-		s.mu.Lock()
-		s.tlsConn = conn
-		s.mu.Unlock()
-
-	} else {
-		conn, err := tls.Dial("tcp", s.address, s.tlsConfig)
-		if err != nil {
-			return err
-		}
-		s.mu.Lock()
-		s.tlsConn = conn
-		s.mu.Unlock()
+	// create dialer with keep-alive and connect time-out
+	timeout := 5 * time.Second
+	keepAliveInterval := 5 * time.Minute
+	dialer := &net.Dialer{
+		Timeout:   timeout,
+		KeepAlive: keepAliveInterval,
 	}
+	Conn, err := dialer.Dial("tcp", s.address)
+	if err != nil {
+		return err
+	}
+	// After a successful handshake, set the read deadline to "never"
+	Conn.SetReadDeadline(time.Time{})
+	s.mu.Lock()
+	s.tcpConn = Conn
+	s.mu.Unlock()
 	log.Printf("%s connect connected to '%s'", s.name, s.address)
 	return nil
 }
 
 // setConnected sets the connection status of the session.
-func (s *TlsSession) setConnected(status bool) {
+func (s *SocketSession) setConnected(status bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.connected = status
 }
 
 // IsConnected returns whether the session is connected.
-func (s *TlsSession) IsConnected() bool {
+func (s *SocketSession) IsConnected() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.connected
 }
 
-func (s *TlsSession) Read(appCtx context.Context, index int, requestHeader string) ([]byte, error) {
+func (s *SocketSession) Read(appCtx context.Context, index int, requestHeader string) ([]byte, error) {
 
 	select {
 	case response := <-s.readCh1:
@@ -542,7 +512,7 @@ func IsValidResponse(response []byte, requestHeader string) bool {
 }
 
 // Write sends data through a connection.
-func (s *TlsSession) Write(index int, data []byte) error {
+func (s *SocketSession) Write(index int, data []byte) error {
 	log.Printf("%s Snding %d bytes", s.name, len(data))
 	//session := s
 	s.writeCh <- data
@@ -553,14 +523,14 @@ func (s *TlsSession) Write(index int, data []byte) error {
 // #################### CONTEXT FUNCTIONS ###################
 // ##########################################################
 
-func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
+func (ctx *SessionContext) FindConnection() (*SocketSession, int, error) {
 	tmp, _ := strconv.Atoi(Cfg.PbmQueueTimeOut)
 	maxTime := time.Duration(tmp)
 	waitDuration := maxTime * time.Second
 	const retryInterval = 100 * time.Millisecond
 
 	startTime := time.Now()
-	if Cfg.PauseSiteIfFailureHigherThan > 0 {
+	if IsSiteHealthCheckEnabled(){		
 		ctx.EvaluateSiteHealth()
 	}
 
@@ -590,7 +560,7 @@ func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
 }
 
 // ReleaseConnection releases a connection, making it available again.
-func (ctx *TlsContext) ReleaseConnection(index int) {
+func (ctx *SessionContext) ReleaseConnection(index int) {
 	ctx.mu.Lock()
 	defer ctx.mu.Unlock()
 
@@ -598,7 +568,7 @@ func (ctx *TlsContext) ReleaseConnection(index int) {
 }
 
 // Write sends data through a connection.
-func (ctx *TlsContext) Write(index int, data []byte) error {
+func (ctx *SessionContext) Write(index int, data []byte) error {
 	log.Printf("Writing %d bytes on chnl: %d", len(data), index)
 	session := ctx.sessions[index]
 	session.writeCh <- data
@@ -606,14 +576,14 @@ func (ctx *TlsContext) Write(index int, data []byte) error {
 }
 
 // Close closes all TLS sessions.
-func (ctx *TlsContext) Close() {
+func (ctx *SessionContext) Close() {
 	log.Printf("TlsContext Close running...")
 	for _, session := range ctx.sessions {
 		log.Printf("sending signal to chnl %d", session.chnl)
 		session.closeCh <- true
 	}
 }
-func (ctx *TlsContext) GetConnectionCount() int {
+func (ctx *SessionContext) GetConnectionCount() int {
 	ctx.mu.Lock()         // Lock the mutex to ensure thread safety
 	defer ctx.mu.Unlock() // Unlock the mutex after the function is done
 

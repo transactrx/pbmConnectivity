@@ -72,7 +72,7 @@ func GetNextUrl() (string, *Site) {
 		return "", nil
 	}
 
-	if Cfg.PauseSiteIfFailureHigherThan > 0 {
+	if IsSiteHealthCheckEnabled() {
 		EvaluateSiteHealth()
 	}
 
