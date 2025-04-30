@@ -1,6 +1,7 @@
 package tlspersistedsynch
 
 import (
+	"fmt"
 	"log"
 	"time"
 )
@@ -20,8 +21,9 @@ func (ctx *TlsContext) EvaluateSiteHealth() {
 		if site.Active && !site.Paused {
 			activeCount++
 		}
-
-		log.Printf("url: %s claims: %d paused: %t failures: %d Cfg.PauseSiteIfFailureHigherThan: %d",site.URL,claims,site.Paused,failures,Cfg.PauseSiteIfFailureHigherThan)
+		if(Cfg.DebugEnabled){
+			log.Printf("url: %s claims: %d paused: %t failures: %d Cfg.PauseSiteIfFailureHigherThan: %d",site.URL,claims,site.Paused,failures,Cfg.PauseSiteIfFailureHigherThan)
+		}
 		if claims >= 10 && !site.Paused {
 			failureRate = (float64(failures) / float64(claims)) * 100
 			if failureRate > float64(Cfg.PauseSiteIfFailureHigherThan) {
@@ -46,6 +48,20 @@ func (s *Site) IsPaused() bool {
 	return s.Paused
 }
 
+func (s *Site) PrintStats()string{
+	line := ""
+	if s == nil {
+		return ""
+	}
+	if !s.lastPausedTime.IsZero() {
+		line = fmt.Sprintf("pbmsitestats url: %s active: %t inprocess: %d failed: %d paused: %t pausecount: %d failurerate: %f lastpaused: %s",s.URL,s.Active,s.activeClaims.Load(),s.failedClaims.Load(),s.Paused,s.pauseCount,s.failureRate,s.lastPausedTime)	
+	}else{
+		line = fmt.Sprintf("pbmsitestats url: %s active: %t inprocess: %d failed: %d paused: %t pausecount: %d failurerate: %f lastpaused: never",s.URL,s.Active,s.activeClaims.Load(),s.failedClaims.Load(),s.Paused,s.pauseCount,s.failureRate)	
+	}
+	
+	return line
+}
+
 func (ctx *TlsContext) StartSiteResetMonitor() {
 	go func() {
 		for {
@@ -61,8 +77,7 @@ func (ctx *TlsContext) CheckSites() {
 	now := time.Now()
 	for i := range ctx.sites {
 		site := ctx.sites[i]
-		log.Printf("Site[%d]: %v", i, site)
-
+		log.Printf("%s",site.PrintStats())
 		site.failedClaims.Store(0)
 		site.activeClaims.Store(0)
 		site.failureRate = 0
