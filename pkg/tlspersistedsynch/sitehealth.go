@@ -53,10 +53,19 @@ func (s *Site) PrintStats()string{
 	if s == nil {
 		return ""
 	}
+
+	activeInt := 0
+	pauseInt := 0 
+	if s.Active {
+		activeInt = 1
+	} 
+	if s.Paused {
+		pauseInt = 1
+	}
 	if !s.lastPausedTime.IsZero() {
-		line = fmt.Sprintf("pbmsitestats url: %s active: %t inprocess: %d failed: %d paused: %t pausecount: %d failurerate: %f lastpaused: %s",s.URL,s.Active,s.activeClaims.Load(),s.failedClaims.Load(),s.Paused,s.pauseCount,s.failureRate,s.lastPausedTime)	
+		line = fmt.Sprintf("pbmsitestats url: %s active: %d inprocess: %d failed: %d paused: %d pausecount: %d failurerate: %f lastpaused: %s",s.URL,activeInt,s.activeClaims.Load(),s.failedClaims.Load(),pauseInt,s.pauseCount,s.failureRate,s.lastPausedTime)	
 	}else{
-		line = fmt.Sprintf("pbmsitestats url: %s active: %t inprocess: %d failed: %d paused: %t pausecount: %d failurerate: %f lastpaused: never",s.URL,s.Active,s.activeClaims.Load(),s.failedClaims.Load(),s.Paused,s.pauseCount,s.failureRate)	
+		line = fmt.Sprintf("pbmsitestats url: %s active: %d inprocess: %d failed: %d paused: %d pausecount: %d failurerate: %f lastpaused: never",s.URL,activeInt,s.activeClaims.Load(),s.failedClaims.Load(),pauseInt,s.pauseCount,s.failureRate)	
 	}
 	
 	return line
