@@ -98,7 +98,7 @@ func createSessionName(i int, siteURL string) string {
 	}
 
 	// Construct the name using the last octets or full strings
-	tmpName := fmt.Sprintf("tls[ch:%d;f:%s;t:%s]", i, hostLastOctet, targetIdentifier)
+	tmpName := fmt.Sprintf("socket[ch:%d;f:%s;t:%s]", i, hostLastOctet, targetIdentifier)
 
 	return tmpName
 }
