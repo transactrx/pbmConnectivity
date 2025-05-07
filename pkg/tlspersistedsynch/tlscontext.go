@@ -98,7 +98,6 @@ func createSessionName(i int, siteURL string) string {
 		// Use full site URL if it's not an IP address
 		targetIdentifier = siteURL
 	}
-
 	// Construct the name using the last octets or full strings
 	tmpName := fmt.Sprintf("tls[ch:%d;f:%s;t:%s]", i, hostLastOctet, targetIdentifier)
 
