@@ -17,11 +17,11 @@ build:
 
 run:
 #   go build -o ${BINARY_NAME} cmd/examplePBM/main.go
-#	go build -o ${BINARY_NAME_TEST_HTTP} cmd/httpPBM/main.go
-	go build -o ${BINARY_NAME_TEST_ASYNCHFLOW} cmd/asynchflowpbm/main.go
+	go build -o ${BINARY_NAME_TEST_HTTP} cmd/httpPBM/main.go
+#	go build -o ${BINARY_NAME_TEST_ASYNCHFLOW} cmd/asynchflowpbm/main.go
 #	./${BINARY_NAME}
-#	./${BINARY_NAME_TEST_HTTP}
-	./${BINARY_NAME_TEST_ASYNCHFLOW}
+	./${BINARY_NAME_TEST_HTTP}
+#	./${BINARY_NAME_TEST_ASYNCHFLOW}
 
 	
 clean: 
