@@ -30,7 +30,7 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 	if values, ok := header["urlOverride"]; ok && len(values) > 0 {
 		urlOverride = values[0]
 	} else {
-		urlOverride, site = GetNextUrl()		
+		urlOverride, site = GetNextUrl()
 	}
 	if values, ok := header["sessionLogin"]; ok && len(values) > 0 {
 		sessionLogin = values[0]
@@ -57,6 +57,9 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 			// submit login Data and verify response
 			if !isSessionLoggedIn {
 				log.Printf("tlssynch.Post tid: %s sending session login data failed", tid)
+				if site != nil {
+					site.failedClaims.Add(1)
+				}
 				DecreaseActiveClaims(site)
 				return nil, nil, err
 			}
@@ -78,7 +81,7 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 }
 
 func DecreaseActiveClaims(site *Site) {
-	if site!= nil && site.activeClaims.Load() > 0 {
+	if site != nil && site.activeClaims.Load() > 0 {
 		site.activeClaims.Add(-1)
 	}
 

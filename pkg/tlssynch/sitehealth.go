@@ -8,35 +8,41 @@ import (
 
 func EvaluateSiteHealth() {
 	activeCount := 0
-	var pausable []*Site
-	var failureRate float64
+	// Count active and unpaused sites
+	for i := range Sites {
+		if Sites[i].Active && !Sites[i].Paused {
+			activeCount++
+		}
+	}
 
-	// First pass: count active sites and identify pausable ones
+	var pausable []*Site
+
+	// Identify pausable sites based on failure rate
 	for i := range Sites {
 		site := &Sites[i]
 		claims := site.activeClaims.Load()
 		failures := site.failedClaims.Load()
 
-		if site.Active && !site.Paused {
-			activeCount++
-		}
-
-		if claims >= 10 && !site.Paused {
-			failureRate = (float64(failures) / float64(claims)) * 100
-			if failureRate > float64(Cfg.PauseSiteIfFailureHigherThan) {
-				site.failureRate = failureRate // Optional: store for log clarity
-				pausable = append(pausable, site)
+		if !site.Paused {
+			if claims >= 10 {
+				failureRate := (float64(failures) / float64(claims)) * 100
+				if failureRate > float64(Cfg.PauseSiteIfFailureHigherThan) {
+					site.failureRate = failureRate
+					pausable = append(pausable, site)
+				} else {
+					site.failureRate = 0
+				}
+			} else {
+				if int(failures) > Cfg.PauseSiteIfFailureHigherThan {
+					pausable = append(pausable, site)
+				} else {
+					site.failureRate = 0
+				}
 			}
 		}
-		if claims < 10 && !site.Paused {
-			if int(failures) > Cfg.PauseSiteIfFailureHigherThan {
-				pausable = append(pausable, site)
-			}
-		}
-
 	}
 
-	// Only pause sites if we’ll still have at least one active site remaining
+	// Pause sites ensuring at least one remains active
 	for _, site := range pausable {
 		if activeCount <= 1 {
 			break
@@ -44,20 +50,31 @@ func EvaluateSiteHealth() {
 		site.Paused = true
 		site.pauseCount++
 		site.lastPausedTime = time.Now()
-		activeCount-- // Decrement as we pause
-		log.Printf("Pausing site %s due to high failure rate (%.2f%%), backoff level %d.\n", site.URL, site.failureRate*100, site.pauseCount)
+		activeCount--
+		log.Printf("Pausing site %s due to high failure rate (%.2f%%), backoff level %d.\n", site.URL, site.failureRate, site.pauseCount)
 	}
 
-	// If only 1 or 0 sites are active, unpause all to ensure traffic can continue
+	// If too few active sites, unpause the oldest paused site
 	if activeCount <= 1 {
+		var oldestPaused *Site
+		var oldestTime time.Time
+
 		for i := range Sites {
 			site := &Sites[i]
 			if site.Paused {
-				log.Printf("Unpausing site %s as only one site is available.\n", site.URL)
-				site.Paused = false
-				site.pauseCount = 0
-				site.failedClaims.Store(0)
+				if oldestPaused == nil || site.lastPausedTime.Before(oldestTime) {
+					oldestPaused = site
+					oldestTime = site.lastPausedTime
+				}
 			}
+		}
+
+		if oldestPaused != nil {
+			log.Printf("Unpausing site %s as only one site is available.\n", oldestPaused.URL)
+			oldestPaused.Paused = false
+			oldestPaused.pauseCount = 0
+			oldestPaused.failedClaims.Store(0)
+			activeCount++
 		}
 	}
 }
@@ -69,6 +86,7 @@ func GetNextUrl() (string, *Site) {
 	)
 
 	if len(Sites) == 0 {
+		log.Printf("GetNextUrl failed Site number is zero")
 		return "", nil
 	}
 
@@ -77,45 +95,49 @@ func GetNextUrl() (string, *Site) {
 	}
 
 	var (
-		bestClaims   = int32(math.MaxInt32)
-		bestFailures = int32(math.MaxInt32)
-		bestFailPct  = float64(1.0) // 100%
+		bestActiveClaims = int32(math.MaxInt32)
+		bestFailures     = int32(math.MaxInt32)
+		bestFailPct      = float64(1.0) // 100%
 	)
 
 	for i := 0; i < len(Sites); i++ {
 		site := &Sites[i]
-		if !site.Active {
+		if !site.Active || site.Paused {
 			continue
 		}
 
+		total := site.totalClaims.Load()
 		claims := site.activeClaims.Load()
 		failures := site.failedClaims.Load()
-		total := claims + failures
-
-		var failPct float64
+		failPct := 0.0
 		if total > 0 {
 			failPct = float64(failures) / float64(total)
-		} else {
-			failPct = 0.0
 		}
 
-		log.Printf("GetNextUrl site: %s claims: %d bestclaims: %d failpct: %f bestFailPct:%f failures: %d ", site.URL, claims, bestClaims, failPct, bestFailPct, failures)
+		log.Printf("GetNextUrl site: %s activeClaims: %d bestActiveClaims: %d failPct: %.2f bestFailPct: %.2f failures: %d",
+			site.URL, claims, bestActiveClaims, failPct, bestFailPct, failures)
 
-		// Primary: least claims, then failure pct, then raw failures
-		if claims < bestClaims ||
-			(claims == bestClaims && failPct < bestFailPct) ||
-			(claims == bestClaims && failPct == bestFailPct && failures < bestFailures) {
+		// Select site with:
+		// 1. Least activeClaims (load balancing)
+		// 2. Lowest failure percentage
+		// 3. Lowest raw failure count (tie-breaker)
 
-			bestClaims = claims
+		if claims < bestActiveClaims ||
+			(claims == bestActiveClaims && failPct < bestFailPct) ||
+			(claims == bestActiveClaims && failPct == bestFailPct && failures < bestFailures) {
+
+			bestActiveClaims = claims
 			bestFailures = failures
 			bestFailPct = failPct
 			selectedSite = site
 		}
+
 	}
 
 	if selectedSite != nil {
 		url = selectedSite.URL
 		selectedSite.activeClaims.Add(1)
+		selectedSite.totalClaims.Add(1)
 	}
 
 	return url, selectedSite
@@ -135,6 +157,7 @@ func StartSiteResetMonitor() {
 
 				site.failedClaims.Store(0)
 				site.activeClaims.Store(0)
+				site.totalClaims.Store(0)
 				site.failureRate = 0
 
 				if site.Paused {
