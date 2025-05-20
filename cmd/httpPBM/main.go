@@ -45,6 +45,7 @@ func main() {
 
 	tlsSync := https.HTTPPBMConnect{
 		Conf: routeInfo,		
+		
 	}
 	//var tlsCon global.PBMConnectWithStats = &https.HTTPPBMConnect{}
 	var tlsCon global.PBMConnectWithStats = &tlsSync
@@ -53,6 +54,7 @@ func main() {
 	header := map[string][]string{
 		"transmissionId": {"123456789"},
 		"Content-Type": {"text/xml"},
+		//"Authorization": {""},
 	}
 
 	time.Sleep(time.Second * 2)

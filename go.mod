@@ -5,6 +5,7 @@ go 1.23.0
 require (
 	github.com/transactrx/ncpdpDestination v0.0.20
 	github.com/valyala/fasthttp v1.59.0
+	golang.org/x/oauth2 v0.30.0
 )
 
 require (

@@ -13,6 +13,24 @@ func IsDebugMode() bool {
 
 func (hpc HTTPPBMConnect) Post(claim []byte, headers map[string][]string) ([]byte, map[string][]string, pbmlib.ErrorInfo) {
 
+	log.Printf("%v",headers)
+	// Inject bearer token if not already present
+	if hpc.TokenMgr != nil && hpc.TokenMgr.IsValidTokenSettings() {
+		log.Printf("Dynamic Token ON")
+		token := hpc.TokenMgr.GetToken() // Ensure this returns a valid/refreshed token
+		if token != "" {
+			authHeader := Header{
+			Key:          "Authorization",
+			Value:        token,
+			Base64encode: false,
+			Prefix:       "Bearer",
+			}
+			hpc.Conf.Headers = append(hpc.Conf.Headers, authHeader)
+		}
+	}else{
+		log.Printf("Dynamic token OFF or Invalid Settings")
+	}
+
 	for pKey, pVal := range headers {
 		// Create a new Header with the value and append it to the Headers slice.
 		newHeader := Header{
