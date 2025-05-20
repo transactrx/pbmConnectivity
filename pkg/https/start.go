@@ -1,12 +1,14 @@
 package https
 
 import (
+	"fmt"
 	"github.com/transactrx/pbmConnectivity/pkg/helpers"
 	"log"
 )
 
 type HTTPPBMConnect struct {
 	Conf RouteInfo
+	TokenMgr* TokenManager
 }
 
 type Config struct {
@@ -22,7 +24,7 @@ type Config struct {
 	PbmPort               string
 	PbmReceiveTimeOut     string
 	PbmInsecureSkipVerify bool
-	TlsSplitHandshake     bool
+	TlsSplitHandshake     bool	
 }
 type RouteInfo struct {
 	RouteCode string   `json:"routeCode"`
@@ -41,18 +43,42 @@ type Header struct {
 const PBM_DATA_BUFFER = 16384
 
 var Cfg Config
+//var TokenMgr *TokenManager
+var TokenCfg TokenConfig
 
 func (pc *HTTPPBMConnect) Start(cfgMap map[string]interface{}) error {
 	log.Println("HTTPPBMConnect::Start")
-
 	Cfg.PbmUrl = helpers.GetString(cfgMap, "pbmUrl")
 	Cfg.PbmPort = helpers.GetString(cfgMap, "pbmPort")
 	Cfg.PbmReceiveTimeOut = helpers.GetString(cfgMap, "pbmReceiveTimeOut")
 	Cfg.PbmInsecureSkipVerify = helpers.GetBool(cfgMap, "pbmInsecureSkipVerify", false)
 	Cfg.TlsSplitHandshake = helpers.GetBool(cfgMap, "TlsSplitHandshake", true)
 	Cfg.IsDebugMode = helpers.GetBool(cfgMap, "debugEnabled", false)
-
+	TokenCfg.ClientID = helpers.GetString(cfgMap, "clientId")
+	TokenCfg.ClientSecret = helpers.GetString(cfgMap, "clientSecret")
+	TokenCfg.TokenURL = helpers.GetString(cfgMap, "tokenUrl")
+	stringTokenType := helpers.GetString(cfgMap, "tokenType")
+	TokenCfg.TokenType, _ = ParseTokenType(stringTokenType)
+	TokenMgr := NewTokenManagerWithConfig(TokenCfg)
+	pc.TokenMgr = TokenMgr
+	if pc.TokenMgr.IsValidTokenSettings() {
+		go GenerateTokens(pc.TokenMgr)	
+	}
 	CreateGlobalHttpContext()
-
 	return nil
+}
+
+func GenerateTokens(TokenMgr *TokenManager)  {
+	TokenMgr.GetToken()
+}
+
+func ParseTokenType(value string) (TokenType, error) {
+	switch value {
+	case "ClientCredentials":
+		return ClientCredentials, nil
+	case "AuthorizationCode":
+		return AuthorizationCode, nil
+	default:
+		return "", fmt.Errorf("invalid token type: %s", value)
+	}
 }

@@ -15,7 +15,7 @@ import (
 func main() {
 
 	log.Printf("####################################################")
-	log.Printf("### PBMConnect Interface Example Using ASynch Flow ###")
+	log.Printf("### PBMConnect Interface Example Using ASynch Flow... ###")
 	log.Printf("####################################################")
 	var tlsCon global.PBMConnectWithStats = &asynchflow.AsynchFlow{}
 	config := make(map[string]interface{})

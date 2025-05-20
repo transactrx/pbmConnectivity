@@ -51,6 +51,9 @@ func FastPost(body []byte, conf RouteInfo) (string, int, error) {
 		} else if len(header.Prefix) > 0 {
 			readyHeader = header.Prefix + " " + readyHeader
 		}
+		if(Cfg.IsDebugMode){
+			log.Printf("Fastpost Header  readyHeader: %s",readyHeader)
+		}
 		req.Header.Set(header.Key, readyHeader)
 	}
 
