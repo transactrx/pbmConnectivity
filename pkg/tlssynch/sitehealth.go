@@ -30,16 +30,18 @@ func EvaluateSiteHealth() {
 					site.failureRate = failureRate
 					pausable = append(pausable, site)
 				} else {
-					site.failureRate = 0
+					// Leave site.failureRate as-is or maybe keep the latest computed value:
+					site.failureRate = failureRate
 				}
 			} else {
+				// Too few claims to trust failure rate, maybe clear or keep it undefined
+				site.failureRate = -1 // or just skip setting it
 				if int(failures) > Cfg.PauseSiteIfFailureHigherThan {
 					pausable = append(pausable, site)
-				} else {
-					site.failureRate = 0
 				}
 			}
 		}
+		
 	}
 
 	// Pause sites ensuring at least one remains active
