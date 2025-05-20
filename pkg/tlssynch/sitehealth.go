@@ -53,32 +53,33 @@ func EvaluateSiteHealth() {
 		site.pauseCount++
 		site.lastPausedTime = time.Now()
 		activeCount--
-		log.Printf("Pausing site %s due to high failure rate (%.2f%%), backoff level %d.\n", site.URL, site.failureRate, site.pauseCount)
+		log.Printf("Pausing site %s due to high failure rate (%.2f%%), backoff level %d.\n", site.URL, site.failureRate*100, site.pauseCount)
 	}
 
+	// MRG / CB ->>> if if absolute need to refator this code,,, its left there... 
 	// If too few active sites, unpause the oldest paused site
-	if activeCount <= 1 {
-		var oldestPaused *Site
-		var oldestTime time.Time
+	// if activeCount < 1 {
+	// 	var oldestPaused *Site
+	// 	var oldestTime time.Time
 
-		for i := range Sites {
-			site := &Sites[i]
-			if site.Paused {
-				if oldestPaused == nil || site.lastPausedTime.Before(oldestTime) {
-					oldestPaused = site
-					oldestTime = site.lastPausedTime
-				}
-			}
-		}
+	// 	for i := range Sites {
+	// 		site := &Sites[i]
+	// 		if site.Paused {
+	// 			if oldestPaused == nil || site.lastPausedTime.Before(oldestTime) {
+	// 				oldestPaused = site
+	// 				oldestTime = site.lastPausedTime
+	// 			}
+	// 		}
+	// 	}
 
-		if oldestPaused != nil {
-			log.Printf("Unpausing site %s as only one site is available.\n", oldestPaused.URL)
-			oldestPaused.Paused = false
-			oldestPaused.pauseCount = 0
-			oldestPaused.failedClaims.Store(0)
-			activeCount++
-		}
-	}
+	// 	if oldestPaused != nil {
+	// 		log.Printf("Unpausing site %s as only one site is available.\n", oldestPaused.URL)
+	// 		oldestPaused.Paused = false
+	// 		oldestPaused.pauseCount = 0
+	// 		oldestPaused.failedClaims.Store(0)
+	// 		activeCount++
+	// 	}
+	// }
 }
 
 func GetNextUrl() (string, *Site) {
