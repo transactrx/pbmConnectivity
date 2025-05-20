@@ -2,8 +2,10 @@ package tlssynch
 
 import (
 	"log"
+	"strings"
 	"sync/atomic"
 	"time"
+
 	"github.com/transactrx/pbmConnectivity/pkg/helpers"
 )
 
@@ -16,7 +18,6 @@ type Config struct {
 	PbmReceiveTimeOut            string
 	PbmInsecureSkipVerify        bool
 	TlsSplitHandshake            bool
-	PbmUrls                      []string
 	PbmActiveSites               []bool
 	PauseSiteIfFailureHigherThan int
 }
@@ -25,6 +26,7 @@ type Site struct {
 	Active         bool
 	activeClaims   atomic.Int32 // Tracks # of claims awaiting responses
 	failedClaims   atomic.Int32
+	totalClaims    atomic.Int32
 	Paused         bool
 	pauseCount     int       // number of consecutive pauses
 	lastPausedTime time.Time // timestamp of the last pause
@@ -38,7 +40,6 @@ var Sites []Site
 func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
 	log.Printf("TLSSyncConnect::Start")
 
-	Cfg.PbmUrls = helpers.GetStringSlice(cfgMap, "pbmUrl")
 	Cfg.PbmActiveSites = helpers.GetBoolSlice(cfgMap, "pbmActiveSites")
 	Cfg.PbmUrl = helpers.GetString(cfgMap, "pbmUrl")
 	Cfg.PbmPort = helpers.GetString(cfgMap, "pbmPort")
@@ -60,7 +61,7 @@ func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
 
 func IsSiteHealthCheckEnabled()bool{
 	retValue := false
-	if(len(Cfg.PbmUrls)> 1 && Cfg.PauseSiteIfFailureHigherThan > 0){
+	if(len(Cfg.PbmUrl)> 1 && Cfg.PauseSiteIfFailureHigherThan > 0){
 		retValue = true
 	}
 	return retValue
@@ -68,9 +69,11 @@ func IsSiteHealthCheckEnabled()bool{
 
 func SetupSites() {
 	activeSite := false
-	Sites = make([]Site, len(Cfg.PbmUrls))
+	// pbmurl has this syntax pbmurl:  site1,site2,sitex 
+	urlSites := strings.Split(Cfg.PbmUrl, ",")
+	Sites = make([]Site, len(urlSites))
 	// Initialize sites based on parsed URLs
-	for i, url := range Cfg.PbmUrls {
+	for i, url := range urlSites {
 		activeSite = false
 		activeSite = Cfg.PbmActiveSites[i]
 		Sites[i] = Site{URL: url, Active: activeSite}
