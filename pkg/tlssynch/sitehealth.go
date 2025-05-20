@@ -171,8 +171,10 @@ func StartSiteResetMonitor() {
 					if now.Sub(site.lastPausedTime) >= backoff {
 						log.Printf("Auto-unpausing site %s after backoff (%v).\n", site.URL, backoff)
 						site.Paused = false
-						site.pauseCount = 0
+						//site.pauseCount = 0
 					}
+					
+
 				}
 			}
 		}
