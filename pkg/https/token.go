@@ -56,12 +56,14 @@ func NewTokenManagerWithConfig(cfg TokenConfig) *TokenManager {
 
 // GetToken returns a valid access token or an empty string if unavailable.
 func (tm *TokenManager) GetToken() string {
+	log.Printf("GetToken: tm.token.isValid()?: %t",tm.token.Valid())
 	if tm.token == nil || !tm.token.Valid() {
 		if err := tm.refreshToken(); err != nil {
 			log.Printf("GetToken: unable to refresh token: %v", err)
 			return ""
 		}
 	}
+
 	return tm.token.AccessToken
 }
 
