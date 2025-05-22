@@ -15,9 +15,11 @@ func (hpc HTTPPBMConnect) Post(claim []byte, headers map[string][]string) ([]byt
 
 	log.Printf("%v",headers)
 	// Inject bearer token if not already present
-	if hpc.TokenMgr != nil && hpc.TokenMgr.IsValidTokenSettings() {
-		log.Printf("Dynamic Token ON")
+	if hpc.TokenMgr != nil && hpc.TokenMgr.IsValidTokenSettings() {		
 		token := hpc.TokenMgr.GetToken() // Ensure this returns a valid/refreshed token
+		if IsDebugMode() {
+			log.Printf("Dynamic Token ON case token value: %s",token)
+		}
 		if token != "" {
 			authHeader := Header{
 			Key:          "Authorization",
