@@ -224,6 +224,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				log.Printf("%s reading... status: %s", s.name, tranFoundState)
 				copy(readBuffer, zeroSlice) // Copy the zeroed slice into the buffer
 				bytes, err := s.tlsConn.Read(readBuffer)
+				
 				if err != nil || bytes <= 0 {
 					// MRG 8.21.24 let the monitor routine disconnect after error count
 					ctx.DisconnectSession(s.chnl)
