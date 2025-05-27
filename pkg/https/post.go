@@ -13,7 +13,7 @@ func IsDebugMode() bool {
 
 func (hpc HTTPPBMConnect) Post(claim []byte, headers map[string][]string) ([]byte, map[string][]string, pbmlib.ErrorInfo) {
 
-	log.Printf("%v",headers)
+	//log.Printf("%v",headers)
 	// Inject bearer token if not already present
 	if hpc.TokenMgr != nil && hpc.TokenMgr.IsValidTokenSettings() {		
 		token := hpc.TokenMgr.GetToken() // Ensure this returns a valid/refreshed token

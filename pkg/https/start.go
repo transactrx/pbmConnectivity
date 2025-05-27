@@ -63,6 +63,7 @@ func (pc *HTTPPBMConnect) Start(cfgMap map[string]interface{}) error {
 	pc.TokenMgr = TokenMgr
 	if pc.TokenMgr.IsValidTokenSettings() {
 		go GenerateTokens(pc.TokenMgr)	
+		go TokenMgr.AutoRefreshToken()		
 	}
 	CreateGlobalHttpContext()
 	return nil
@@ -71,6 +72,7 @@ func (pc *HTTPPBMConnect) Start(cfgMap map[string]interface{}) error {
 func GenerateTokens(TokenMgr *TokenManager)  {
 	TokenMgr.GetToken()
 }
+
 
 func ParseTokenType(value string) (TokenType, error) {
 	switch value {
