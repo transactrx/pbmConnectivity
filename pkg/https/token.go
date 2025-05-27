@@ -8,9 +8,10 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
+
 	"golang.org/x/oauth2"
-	
 )
 
 // TokenType is a custom type for token types.
@@ -18,32 +19,34 @@ type TokenType string
 
 // Enum-like constants for TokenType.
 const (
-	ClientCredentials TokenType = "client_credentials" // service to service interaction - no login needed 
-	AuthorizationCode TokenType = "authorization_code" // linked to user login 
+	ClientCredentials TokenType = "client_credentials" // service to service interaction - no login needed
+	AuthorizationCode TokenType = "authorization_code" // linked to user login
 )
 
 type TokenManager struct {
-	config     TokenConfig
-	httpClient *http.Client
-	token      *oauth2.Token
+	config      TokenConfig
+	httpClient  *http.Client
+	token       *oauth2.Token
+	expiryDelta time.Duration // optional; if zero, fall back to default
+	mu    sync.RWMutex
 }
 
 type TokenConfig struct {
-	TokenType TokenType
+	TokenType    TokenType
 	ClientID     string
 	ClientSecret string
 	TokenURL     string
 	HTTPTimeout  time.Duration
 }
+var timeNow = time.Now
 
-func (tm *TokenManager)IsValidTokenSettings()bool {
-	log.Printf("TokenMgr config: %v",tm.config)
-	if len(tm.config.ClientID)>0 && len(tm.config.ClientSecret)>0&&len(tm.config.TokenURL)>0 {
+func (tm *TokenManager) IsValidTokenSettings() bool {
+	//log.Printf("TokenMgr config: %v", tm.config)
+	if len(tm.config.ClientID) > 0 && len(tm.config.ClientSecret) > 0 && len(tm.config.TokenURL) > 0 {
 		return true
 	}
 	return false
 }
-
 
 func NewTokenManagerWithConfig(cfg TokenConfig) *TokenManager {
 	return &TokenManager{
@@ -54,10 +57,74 @@ func NewTokenManagerWithConfig(cfg TokenConfig) *TokenManager {
 	}
 }
 
+// Valid reports whether the token is non-nil, has an AccessToken, and is not expired.
+func (tm *TokenManager) Valid() bool {
+	if tm.token == nil || tm.token.AccessToken == "" {
+		return false
+	}
+	return !tm.Expired()
+}
+
+func (tm *TokenManager) Expired() bool {
+	if tm.token == nil {
+		return true
+	}
+	if tm.token.Expiry.IsZero() {
+		return false
+	}
+	expiryDelta := tm.expiryDelta
+	if expiryDelta == 0 {
+		expiryDelta = refreshDelta
+	}
+	log.Printf("Now: %v, Token expiry: %v, Adjusted cutoff: %v\n", timeNow(), tm.token.Expiry, tm.token.Expiry.Add(-expiryDelta))
+	return tm.token.Expiry.Add(-expiryDelta).Before(timeNow())
+}
+const refreshDelta = 10 * time.Second
+
+func (tm *TokenManager) AutoRefreshToken() {
+	var err error
+	for {
+		if tm.token != nil {
+			expiresIn := time.Duration(tm.token.ExpiresIn) * time.Second
+			expiry := timeNow().Add(expiresIn)
+
+			refreshAfter := time.Until(expiry.Add(-refreshDelta))
+			log.Printf("refreshAfter: %s, expiry: %v", refreshAfter, expiry)
+
+			if refreshAfter > 0 {
+				time.Sleep(refreshAfter)
+			}
+			err = tm.refreshToken()
+			if err != nil {
+				log.Printf("Token refresh failed: %v", err)
+			}
+		} else {
+			log.Printf("Token - wait 10 seconds...")
+			time.Sleep(10 * time.Second)
+		}
+	}
+}
+
 // GetToken returns a valid access token or an empty string if unavailable.
 func (tm *TokenManager) GetToken() string {
-	log.Printf("GetToken: tm.token.isValid()?: %t",tm.token.Valid())
-	if tm.token == nil || !tm.token.Valid() {
+	tm.mu.RLock()
+	isValid := tm.token != nil && tm.Valid()
+	accessToken := ""
+	if isValid {
+		accessToken = tm.token.AccessToken
+	}
+	tm.mu.RUnlock()
+
+	if isValid {
+		return accessToken
+	}
+
+	// Now we need to refresh — get write lock
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	// Double-check in case another goroutine refreshed it already
+	if tm.token == nil || !tm.Valid() {
 		if err := tm.refreshToken(); err != nil {
 			log.Printf("GetToken: unable to refresh token: %v", err)
 			return ""
@@ -66,7 +133,6 @@ func (tm *TokenManager) GetToken() string {
 
 	return tm.token.AccessToken
 }
-
 // GetIDToken extracts the raw ID token from the token response.
 func (tm *TokenManager) GetIDToken() string {
 	if tm.token == nil {
@@ -83,13 +149,13 @@ func (tm *TokenManager) GetIDToken() string {
 // refreshToken performs a client credentials token request and updates the stored token.
 func (tm *TokenManager) refreshToken() error {
 	data := url.Values{}
-	log.Printf("Token type: %v",tm.config.TokenType)
+	log.Printf("Token type: %v", tm.config.TokenType)
 	switch tm.config.TokenType {
 	case ClientCredentials:
 		data.Set("grant_type", "client_credentials")
 	case AuthorizationCode:
 		data.Set("scope", "openid")
-	default: 
+	default:
 		log.Printf("Unsupported token type: %s", tm.config.TokenType)
 	}
 
