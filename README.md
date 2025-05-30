@@ -189,7 +189,7 @@ This project includes comprehensive unit tests covering:
 
 ### CI/CD Integration:
 The GitHub Actions workflows automatically:
-- Run tests on Go versions 1.21, 1.22, and 1.23
+- Run tests on Go versions 1.22, 1.23, and 1.24.3
 - Generate coverage reports
 - Build example applications
 - Upload artifacts and coverage to Codecov
