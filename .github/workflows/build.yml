@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.22', '1.23', '1.24.3']
+        go-version: ['1.24.3']
 
     steps:
       - name: Checkout code
@@ -45,13 +45,13 @@ jobs:
         with:
           file: ./coverage.out
           flags: unittests
-          name: codecov-${{ matrix.go-version }}
+          name: codecov-go1.24.3
           fail_ci_if_error: false
 
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report-go-${{ matrix.go-version }}
+          name: coverage-report-go1.24.3
           path: |
             coverage.out
             coverage.html

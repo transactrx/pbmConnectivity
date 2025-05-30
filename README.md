@@ -22,6 +22,10 @@ pbmConnectivity provides a unified interface for communicating with PBM systems 
 - OAuth2 token management for HTTP connections
 - FastHTTP support for high-performance HTTP operations
 
+## Requirements
+
+**Go 1.24.3 or later is required** due to critical security vulnerabilities in earlier versions.
+
 ## Installation
 
 ```bash
@@ -189,7 +193,7 @@ This project includes comprehensive unit tests covering:
 
 ### CI/CD Integration:
 The GitHub Actions workflows automatically:
-- Run tests on Go versions 1.22, 1.23, and 1.24.3
+- Run tests on Go 1.24.3 (minimum required version)
 - Generate coverage reports
 - Build example applications
 - Upload artifacts and coverage to Codecov
