@@ -41,7 +41,7 @@ func EvaluateSiteHealth() {
 				}
 			}
 		}
-		
+
 	}
 
 	// Pause sites ensuring at least one remains active
@@ -55,31 +55,6 @@ func EvaluateSiteHealth() {
 		activeCount--
 		log.Printf("Pausing site %s due to high failure rate (%.2f%%), backoff level %d.\n", site.URL, site.failureRate*100, site.pauseCount)
 	}
-
-	// MRG / CB ->>> if if absolute need to refator this code,,, its left there... 
-	// If too few active sites, unpause the oldest paused site
-	// if activeCount < 1 {
-	// 	var oldestPaused *Site
-	// 	var oldestTime time.Time
-
-	// 	for i := range Sites {
-	// 		site := &Sites[i]
-	// 		if site.Paused {
-	// 			if oldestPaused == nil || site.lastPausedTime.Before(oldestTime) {
-	// 				oldestPaused = site
-	// 				oldestTime = site.lastPausedTime
-	// 			}
-	// 		}
-	// 	}
-
-	// 	if oldestPaused != nil {
-	// 		log.Printf("Unpausing site %s as only one site is available.\n", oldestPaused.URL)
-	// 		oldestPaused.Paused = false
-	// 		oldestPaused.pauseCount = 0
-	// 		oldestPaused.failedClaims.Store(0)
-	// 		activeCount++
-	// 	}
-	// }
 }
 
 func GetNextUrl() (string, *Site) {
@@ -117,8 +92,8 @@ func GetNextUrl() (string, *Site) {
 			failPct = float64(failures) / float64(total)
 		}
 
-		log.Printf("GetNextUrl site: %s activeClaims: %d bestActiveClaims: %d failPct: %.2f bestFailPct: %.2f failures: %d",
-			site.URL, claims, bestActiveClaims, failPct, bestFailPct, failures)
+		//log.Printf("GetNextUrl site: %s activeClaims: %d bestActiveClaims: %d failPct: %.2f bestFailPct: %.2f failures: %d",
+		//	site.URL, claims, bestActiveClaims, failPct, bestFailPct, failures)
 
 		// Select site with:
 		// 1. Least activeClaims (load balancing)
@@ -139,6 +114,7 @@ func GetNextUrl() (string, *Site) {
 
 	if selectedSite != nil {
 		url = selectedSite.URL
+		log.Printf("GetNextUrl bestSite: %s bestActiveClaims: %d bestFailPct: %.2f bestFailures: %d", url, bestActiveClaims, bestFailPct, bestFailures)
 		selectedSite.activeClaims.Add(1)
 		selectedSite.totalClaims.Add(1)
 	}
@@ -173,7 +149,6 @@ func StartSiteResetMonitor() {
 						site.Paused = false
 						//site.pauseCount = 0
 					}
-					
 
 				}
 			}
