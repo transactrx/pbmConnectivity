@@ -1,6 +1,6 @@
 module github.com/transactrx/pbmConnectivity
 
-go 1.23.0
+go 1.24.3
 
 require (
 	github.com/transactrx/ncpdpDestination v0.0.20

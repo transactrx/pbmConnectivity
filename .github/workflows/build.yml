@@ -1,26 +1,88 @@
-# This workflow will build a golang project
+# This workflow will build a golang project and run comprehensive tests
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
 
-name: Go
+name: Build and Test
 
 on:
   push:
     branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
 
 jobs:
-
-  build:
+  test:
+    name: Test
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.24.3']
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
-          go-version: 1.21
+          go-version: ${{ matrix.go-version }}
+          cache: true
+          cache-dependency-path: go.sum
 
-      - name: Build
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Run unit tests with coverage
+        run: |
+          go test -v -race -coverprofile=coverage.out ./pkg/...
+
+      - name: Generate coverage report
+        run: |
+          go tool cover -func=coverage.out
+          go tool cover -html=coverage.out -o coverage.html
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.out
+          flags: unittests
+          name: codecov-go1.24.3
+          fail_ci_if_error: false
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-go1.24.3
+          path: |
+            coverage.out
+            coverage.html
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24.3'
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Build all packages
         run: go build -v ./...
 
-      - name: Test
-        run: go test -v ./...
+      - name: Build example applications
+        run: |
+          mkdir -p bin/
+          go build -o bin/httpsample cmd/httpPBM/main.go
+          go build -o bin/asynchsample cmd/asynchflowpbm/main.go
+          go build -o bin/tlssample cmd/examplePBM/main.go
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: bin/

@@ -1,11 +1,45 @@
+name: Release
+
 on:
   push:
     branches:
       - Production
 
 jobs:
-  release-on-push:
+  test-before-release:
+    name: Test Before Release
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24.3'
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Run all tests
+        run: |
+          go test -v -race ./pkg/...
+
+      - name: Build all packages
+        run: go build -v ./...
+
+      - name: Build examples
+        run: |
+          go build -o bin/httpsample cmd/httpPBM/main.go
+          go build -o bin/asynchsample cmd/asynchflowpbm/main.go
+          go build -o bin/tlssample cmd/examplePBM/main.go
+
+  release-on-push:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: test-before-release
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
