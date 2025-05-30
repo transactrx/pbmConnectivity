@@ -141,6 +141,18 @@ func main() {
 
 ## Building and Running
 
+### Run Tests:
+```bash
+# Run all unit tests
+make test
+
+# Run tests with coverage report
+make test-coverage
+
+# Run CI pipeline (test + build)
+make ci
+```
+
 ### Build the library:
 ```bash
 make build
@@ -156,6 +168,32 @@ go build -o httpsample cmd/httpPBM/main.go
 go build -o asynchsample cmd/asynchflowpbm/main.go
 go build -o tlssample cmd/examplePBM/main.go
 ```
+
+## Testing
+
+This project includes comprehensive unit tests covering:
+
+- **Configuration Management**: All helper utilities with edge case testing
+- **Interface Contracts**: Mock implementations and error handling
+- **OAuth2 Authentication**: Token lifecycle, refresh, and validation
+- **Connection Management**: Load balancing, site health, and failover
+- **Concurrency**: Thread-safe operations and atomic counters
+
+### Test Coverage:
+- `pkg/helpers`: 100% coverage of utility functions
+- `pkg/global`: Interface contract validation  
+- `pkg/https`: OAuth2 token management and HTTP status mapping
+- `pkg/asynchflow`: Concurrent TLS session management
+- `pkg/tlssynch`: Site health monitoring and load balancing
+- `pkg/socketsynch`: Socket connection management
+
+### CI/CD Integration:
+The GitHub Actions workflows automatically:
+- Run tests on Go versions 1.21, 1.22, and 1.23
+- Generate coverage reports
+- Build example applications
+- Upload artifacts and coverage to Codecov
+- Ensure all tests pass before releasing
 
 ## Examples
 
