@@ -99,7 +99,7 @@ func GetNextUrl() (string, *Site) {
 			failPct = 0.0
 		}
 
-		log.Printf("GetNextUrl site: %s claims: %d bestclaims: %d failpct: %f bestFailPct:%f failures: %d ", site.URL, claims, bestClaims, failPct, bestFailPct, failures)
+		//	log.Printf("GetNextUrl site: %s claims: %d bestclaims: %d failpct: %f bestFailPct:%f failures: %d ", site.URL, claims, bestClaims, failPct, bestFailPct, failures)
 
 		// Primary: least claims, then failure pct, then raw failures
 		if claims < bestClaims ||
@@ -115,6 +115,7 @@ func GetNextUrl() (string, *Site) {
 
 	if selectedSite != nil {
 		url = selectedSite.URL
+		log.Printf("GetNextUrl bestSite: %s bestActiveClaims: %d bestFailPct: %.2f bestFailures: %d", url, bestClaims, bestFailPct, bestFailures)
 		selectedSite.activeClaims.Add(1)
 	}
 
@@ -145,7 +146,7 @@ func StartSiteResetMonitor() {
 					if now.Sub(site.lastPausedTime) >= backoff {
 						log.Printf("Auto-unpausing site %s after backoff (%v).\n", site.URL, backoff)
 						site.Paused = false
-						site.pauseCount = 0
+						//site.pauseCount = 0
 					}
 				}
 			}
