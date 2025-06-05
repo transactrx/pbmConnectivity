@@ -1,18 +1,18 @@
 package socketsynch
 
 import (
+	"github.com/transactrx/ncpdpDestination/pkg/pbmlib"
 	"log"
 	"net"
 	"strconv"
 	"time"
-	"github.com/transactrx/ncpdpDestination/pkg/pbmlib"
 )
 
 func (pc *SocketSynchConnect) Post(claim []byte, header map[string][]string) ([]byte, map[string][]string, pbmlib.ErrorInfo) {
 
 	var responseBuffer []byte
 	bytesRead := 0
-	tmp, _ := strconv.Atoi(Cfg.PbmReceiveTimeOut)
+	tmp, _ := strconv.Atoi(pc.Cfg.PbmReceiveTimeOut)
 	timeOut := time.Duration(float64(tmp) * float64(time.Second))
 	tid := "Unknown-TID"
 	urlOverride := ""
@@ -39,7 +39,7 @@ func (pc *SocketSynchConnect) Post(claim []byte, header map[string][]string) ([]
 	if values, ok := header["loginData"]; ok && len(values) > 0 {
 		loginData = values[0]
 	}
-	conn, err := Connect(tid, urlOverride)
+	conn, err := Connect(tid, urlOverride, pc.Cfg)
 	if err != pbmlib.ErrorCode.TRX00 {
 
 		log.Printf("socketsynch.Post tid: %s Connect failed, error: '%s'", tid, err.Message)
@@ -81,22 +81,22 @@ func DecreaseActiveClaims(site *Site) {
 
 }
 
-func Connect(tid string, urlOverride string) (net.Conn, pbmlib.ErrorInfo) {
+func Connect(tid string, urlOverride string, cfg Config) (net.Conn, pbmlib.ErrorInfo) {
 
-	url := Cfg.PbmUrl	
+	url := cfg.PbmUrl
 	var err error
 	if len(urlOverride) > 0 {
 		url = urlOverride
 	}
-	address := url + ":" + Cfg.PbmPort
+	address := url // + ":" + cfg.PbmPort
 	log.Printf("socketsynch.connect tid: %s connecting to '%s'", tid, address)
-	start := time.Now() // Capture the start time
+	start := time.Now()        // Capture the start time
 	timeout := 5 * time.Second // Adjust the timeout duration as needed
 	conn, err := net.DialTimeout("tcp", address, timeout)
 	if err != nil {
 		log.Printf("socketsynch.connect tid: %s failed, error: '%s'", tid, err)
 		return nil, pbmlib.ErrorCode.TRX02
-	} 
+	}
 	elapsed := time.Since(start) // Calculate elapsed time
 	log.Printf("socketsynch.connect tid: %s ok tls handshake duration: %d ms url: %s", tid, elapsed.Milliseconds(), address)
 	//log.Printf("socketsynch.connect tid: %s tls handshake duration: %d ms url: %s", tid,elapsed.Milliseconds(),address)

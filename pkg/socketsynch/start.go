@@ -1,14 +1,14 @@
 package socketsynch
 
 import (
+	"github.com/transactrx/pbmConnectivity/pkg/helpers"
 	"log"
 	"sync/atomic"
 	"time"
-	"github.com/transactrx/pbmConnectivity/pkg/helpers"
 )
 
 type SocketSynchConnect struct {
-	test string
+	Cfg Config
 }
 type Config struct {
 	PbmUrl                       string
@@ -17,6 +17,7 @@ type Config struct {
 	PbmInsecureSkipVerify        bool
 	TlsSplitHandshake            bool
 	PbmUrls                      []string
+	PbmPorts                     []string
 	PbmActiveSites               []bool
 	PauseSiteIfFailureHigherThan int
 }
@@ -32,46 +33,59 @@ type Site struct {
 }
 
 const PBM_DATA_BUFFER = 16384
+
 var Cfg Config
+var SiteHealthEnabled = false
+var PauseSiteIfFailureHigherThan = 0
 var Sites []Site
 
 func (pc *SocketSynchConnect) Start(cfgMap map[string]interface{}) error {
 	log.Printf("SocketSynchConnect::Start")
 
-	Cfg.PbmUrls = helpers.GetStringSlice(cfgMap, "pbmUrl")
-	Cfg.PbmActiveSites = helpers.GetBoolSlice(cfgMap, "pbmActiveSites")
-	Cfg.PbmUrl = helpers.GetString(cfgMap, "pbmUrl")
-	Cfg.PbmPort = helpers.GetString(cfgMap, "pbmPort")
-	Cfg.PbmReceiveTimeOut = helpers.GetString(cfgMap, "pbmReceiveTimeOut")
-	Cfg.PauseSiteIfFailureHigherThan = helpers.GetIntWithDefault(cfgMap, "PauseSiteIfFailureHigherThan", 0)
+	pc.Cfg.PbmUrls = helpers.GetStringSlice(cfgMap, "pbmUrl")
+	pc.Cfg.PbmActiveSites = helpers.GetBoolSlice(cfgMap, "pbmActiveSites")
+	pc.Cfg.PbmUrl = helpers.GetString(cfgMap, "pbmUrl")
+	pc.Cfg.PbmPort = helpers.GetString(cfgMap, "pbmPort")
+	pc.Cfg.PbmPorts = helpers.GetStringSlice(cfgMap, "pbmPort")
+	pc.Cfg.PbmReceiveTimeOut = helpers.GetString(cfgMap, "pbmReceiveTimeOut")
+	pc.Cfg.PauseSiteIfFailureHigherThan = helpers.GetIntWithDefault(cfgMap, "PauseSiteIfFailureHigherThan", 0)
 
-	SetupSites()
-
-	log.Printf("Start: configuration: %v", Cfg)
-
-	if IsSiteHealthCheckEnabled() {
-		StartSiteResetMonitor()
+	//log.Printf("Site information %v len(sites) %d", Sites, len(Sites))
+	log.Printf("Start: configuration: %v", pc.Cfg)
+	if len(Sites) <= 0 {
+		SetupSites(pc.Cfg)
+		SiteHealthEnabled = IsSiteHealthCheckEnabled(pc.Cfg)
+		PauseSiteIfFailureHigherThan = pc.Cfg.PauseSiteIfFailureHigherThan
+		if SiteHealthEnabled {
+			StartSiteResetMonitor()
+		}
 	}
 
 	return nil
 }
 
-func IsSiteHealthCheckEnabled()bool{
+func IsSiteHealthCheckEnabled(Cfg Config) bool {
 	retValue := false
-	if(len(Cfg.PbmUrls)> 1 && Cfg.PauseSiteIfFailureHigherThan > 0){
+	if len(Cfg.PbmUrls) > 1 && Cfg.PauseSiteIfFailureHigherThan > 0 {
 		retValue = true
 	}
 	return retValue
 }
 
+func SetupSites(Cfg Config) {
 
-func SetupSites() {
-	activeSite := false
-	Sites = make([]Site, len(Cfg.PbmUrls))
-	// Initialize sites based on parsed URLs
+	Sites = make([]Site, len(Cfg.PbmUrls)*len(Cfg.PbmPorts))
+	// Initialize sites based on parsed URLs & ports
+	idx := 0
+	active := false
 	for i, url := range Cfg.PbmUrls {
-		activeSite = false
-		activeSite = Cfg.PbmActiveSites[i]
-		Sites[i] = Site{URL: url, Active: activeSite}
+		active = false
+		active = Cfg.PbmActiveSites[i]
+		for _, port := range Cfg.PbmPorts {
+			tmp := url + ":" + port
+			Sites[idx] = Site{URL: tmp, Active: active}
+			idx++
+		}
 	}
+
 }

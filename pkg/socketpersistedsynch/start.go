@@ -15,6 +15,7 @@ var Ctx *SessionContext
 
 type Config struct {
 	PbmUrl                []string
+	PbmPorts              []string
 	PbmPort               string
 	PbmReceiveTimeOut     string
 	PbmQueueTimeOut       string
@@ -45,6 +46,7 @@ func (pc *SocketPersistedSyncConnect) Start(cfgMap map[string]interface{}) error
 	var err error
 
 	Cfg.PbmUrl = helpers.GetStringSlice(cfgMap, "pbmUrl")
+	Cfg.PbmPorts = helpers.GetStringSlice(cfgMap, "pbmPort")
 	Cfg.PbmPort = helpers.GetString(cfgMap, "pbmPort")
 	Cfg.PbmReceiveTimeOut = helpers.GetString(cfgMap, "pbmReceiveTimeOut")
 	Cfg.PbmInsecureSkipVerify = helpers.GetBool(cfgMap, "pbmInsecureSkipVerify", false)
@@ -73,9 +75,9 @@ func (pc *SocketPersistedSyncConnect) Start(cfgMap map[string]interface{}) error
 	return nil
 }
 
-func IsSiteHealthCheckEnabled()bool{
+func IsSiteHealthCheckEnabled() bool {
 	retValue := false
-	if(len(Cfg.PbmUrl)> 1 && Cfg.PauseSiteIfFailureHigherThan > 0){
+	if len(Cfg.PbmUrl) > 1 && Cfg.PauseSiteIfFailureHigherThan > 0 {
 		retValue = true
 	}
 	return retValue
