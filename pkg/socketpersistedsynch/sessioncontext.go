@@ -34,8 +34,8 @@ type Response struct {
 
 // SocketSession represents a single TLS session.
 type SocketSession struct {
-	name    string
-	address string
+	name      string
+	address   string
 	tcpConn   net.Conn
 	readCh    chan []byte
 	readCh1   chan Response
@@ -111,21 +111,24 @@ func NewTlsContext(appCfg Config) (*SessionContext, error) {
 	ctx := &SessionContext{
 		sessions: make([]*SocketSession, appCfg.PbmOutboundChnls),
 		bitmap:   make([]bool, appCfg.PbmOutboundChnls),
-		sites:    make([]*Site, len(appCfg.PbmUrl)), // Create sites based on the number of URLs
-
+		//sites:    make([]*Site, len(appCfg.PbmUrl)), // Create sites based on the number of URLs
+		sites: make([]*Site, len(appCfg.PbmUrl)*len(Cfg.PbmPorts)),
 	}
 
-	activeSite := false
 	// Initialize sites based on parsed URLs
-	for i, url := range appCfg.PbmUrl {
-		activeSite = false
-		activeSite = Cfg.PbmActiveSites[i]
-		ctx.sites[i] = &Site{URL: url, Active: activeSite}
+	idx := 0
+	for i, url := range Cfg.PbmUrl {
+		active := Cfg.PbmActiveSites[i]
+		for _, port := range Cfg.PbmPorts {
+			tmp := url + ":" + port
+			ctx.sites[idx] = &Site{URL: tmp, Active: active}
+			idx++
+		}
 	}
 	// Assign sessions to sites
 	for i := 0; i < appCfg.PbmOutboundChnls; i++ {
 		site := ctx.sites[i%len(ctx.sites)] // Round-robin assignment of sites
-		addr := site.URL + ":" + appCfg.PbmPort
+		addr := site.URL                    //+ ":" + appCfg.PbmPort
 
 		session := &SocketSession{
 			name:      createSessionName(i, site.URL),
@@ -530,7 +533,7 @@ func (ctx *SessionContext) FindConnection() (*SocketSession, int, error) {
 	const retryInterval = 100 * time.Millisecond
 
 	startTime := time.Now()
-	if IsSiteHealthCheckEnabled(){		
+	if IsSiteHealthCheckEnabled() {
 		ctx.EvaluateSiteHealth()
 	}
 
