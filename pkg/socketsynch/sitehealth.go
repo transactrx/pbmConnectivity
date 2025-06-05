@@ -23,13 +23,13 @@ func EvaluateSiteHealth() {
 
 		if claims >= 10 && !site.Paused {
 			failureRate = (float64(failures) / float64(claims)) * 100
-			if failureRate > float64(Cfg.PauseSiteIfFailureHigherThan) {
+			if failureRate > float64(PauseSiteIfFailureHigherThan) {
 				site.failureRate = failureRate // Optional: store for log clarity
 				pausable = append(pausable, site)
 			}
 		}
 		if claims < 10 && !site.Paused {
-			if int(failures) > Cfg.PauseSiteIfFailureHigherThan {
+			if int(failures) > PauseSiteIfFailureHigherThan {
 				pausable = append(pausable, site)
 			}
 		}
@@ -72,7 +72,7 @@ func GetNextUrl() (string, *Site) {
 		return "", nil
 	}
 
-	if IsSiteHealthCheckEnabled() {
+	if SiteHealthEnabled {
 		EvaluateSiteHealth()
 	}
 
@@ -132,7 +132,7 @@ func StartSiteResetMonitor() {
 			now := time.Now()
 			for i := range Sites {
 				site := &Sites[i]
-				log.Printf("Site[%d]: %v", i, site)
+				log.Printf("Site pointer: %p Site[%d]: %v", site, i, site)
 
 				site.failedClaims.Store(0)
 				site.activeClaims.Store(0)

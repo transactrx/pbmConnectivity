@@ -10,6 +10,10 @@ update:
 	echo "refreshing libraries"
 	go get -u all
 
+testone:
+	echo "running one test only..."
+	go test -v github.com/transactrx/pbmConnectivity/pkg/tlssynch
+
 test:
 	echo "running tests..."
 	go test -v -race ./pkg/...
@@ -24,6 +28,9 @@ build:
 	echo "building..."
 	go mod tidy	
 	go build ./...
+
+
+
 
 run:
 #   go build -o ${BINARY_NAME} cmd/examplePBM/main.go
