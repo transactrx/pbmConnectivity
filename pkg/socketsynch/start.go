@@ -34,7 +34,7 @@ type Site struct {
 
 const PBM_DATA_BUFFER = 16384
 
-// var Cfg Config
+var Cfg Config
 var SiteHealthEnabled = false
 var PauseSiteIfFailureHigherThan = 0
 var Sites []Site
@@ -77,8 +77,10 @@ func SetupSites(Cfg Config) {
 	Sites = make([]Site, len(Cfg.PbmUrls)*len(Cfg.PbmPorts))
 	// Initialize sites based on parsed URLs & ports
 	idx := 0
+	active := false
 	for i, url := range Cfg.PbmUrls {
-		active := Cfg.PbmActiveSites[i]
+		active = false
+		active = Cfg.PbmActiveSites[i]
 		for _, port := range Cfg.PbmPorts {
 			tmp := url + ":" + port
 			Sites[idx] = Site{URL: tmp, Active: active}

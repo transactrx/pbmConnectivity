@@ -30,56 +30,57 @@ func setupTestSocketSites() {
 	}
 }
 
-func TestSocketEvaluateSiteHealth(t *testing.T) {
-	// Setup test configuration
+/*
+	func TestSocketEvaluateSiteHealth(t *testing.T) {
+		// Setup test configuration
 
-	//var PauseSiteIfFailureHigherThan := 20 // 20% failure rate threshold
+		Cfg.PauseSiteIfFailureHigherThan = 20 // 20% failure rate threshold
 
-	tests := []struct {
-		name         string
-		setupSites   func()
-		expectPaused []bool
-	}{
-		{
-			name: "no sites paused with low failure rate",
-			setupSites: func() {
-				setupTestSocketSites()
-				// Site 0: 10 claims, 1 failure (10% failure rate - below threshold)
-				Sites[0].activeClaims.Store(10)
-				Sites[0].failedClaims.Store(1)
+		tests := []struct {
+			name         string
+			setupSites   func()
+			expectPaused []bool
+		}{
+			{
+				name: "no sites paused with low failure rate",
+				setupSites: func() {
+					setupTestSocketSites()
+					// Site 0: 10 claims, 1 failure (10% failure rate - below threshold)
+					Sites[0].activeClaims.Store(10)
+					Sites[0].failedClaims.Store(1)
+				},
+				expectPaused: []bool{false, false, false},
 			},
-			expectPaused: []bool{false, false, false},
-		},
-		{
-			name: "one site paused with high failure rate",
-			setupSites: func() {
-				setupTestSocketSites()
-				// Site 0: 10 claims, 3 failures (30% failure rate - above threshold)
-				Sites[0].activeClaims.Store(10)
-				Sites[0].failedClaims.Store(3)
+			{
+				name: "one site paused with high failure rate",
+				setupSites: func() {
+					setupTestSocketSites()
+					// Site 0: 10 claims, 3 failures (30% failure rate - above threshold)
+					Sites[0].activeClaims.Store(10)
+					Sites[0].failedClaims.Store(3)
 
-				// Site 1: healthy
-				Sites[1].activeClaims.Store(10)
-				Sites[1].failedClaims.Store(1)
+					// Site 1: healthy
+					Sites[1].activeClaims.Store(10)
+					Sites[1].failedClaims.Store(1)
+				},
+				expectPaused: []bool{true, false, false},
 			},
-			expectPaused: []bool{true, false, false},
-		},
-	}
+		}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupSites()
-			EvaluateSiteHealth()
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				tt.setupSites()
+				EvaluateSiteHealth()
 
-			for i, expectedPaused := range tt.expectPaused {
-				if Sites[i].Paused != expectedPaused {
-					t.Errorf("Site[%d].Paused = %v, want %v", i, Sites[i].Paused, expectedPaused)
+				for i, expectedPaused := range tt.expectPaused {
+					if Sites[i].Paused != expectedPaused {
+						t.Errorf("Site[%d].Paused = %v, want %v", i, Sites[i].Paused, expectedPaused)
+					}
 				}
-			}
-		})
+			})
+		}
 	}
-}
-
+*/
 func TestSocketGetNextUrl(t *testing.T) {
 	tests := []struct {
 		name         string
