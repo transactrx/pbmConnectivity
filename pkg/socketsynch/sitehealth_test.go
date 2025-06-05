@@ -32,7 +32,8 @@ func setupTestSocketSites() {
 
 func TestSocketEvaluateSiteHealth(t *testing.T) {
 	// Setup test configuration
-	Cfg.PauseSiteIfFailureHigherThan = 20 // 20% failure rate threshold
+
+	//var PauseSiteIfFailureHigherThan := 20 // 20% failure rate threshold
 
 	tests := []struct {
 		name         string
@@ -56,7 +57,7 @@ func TestSocketEvaluateSiteHealth(t *testing.T) {
 				// Site 0: 10 claims, 3 failures (30% failure rate - above threshold)
 				Sites[0].activeClaims.Store(10)
 				Sites[0].failedClaims.Store(3)
-				
+
 				// Site 1: healthy
 				Sites[1].activeClaims.Store(10)
 				Sites[1].failedClaims.Store(1)
@@ -69,7 +70,7 @@ func TestSocketEvaluateSiteHealth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupSites()
 			EvaluateSiteHealth()
-			
+
 			for i, expectedPaused := range tt.expectPaused {
 				if Sites[i].Paused != expectedPaused {
 					t.Errorf("Site[%d].Paused = %v, want %v", i, Sites[i].Paused, expectedPaused)
@@ -101,9 +102,9 @@ func TestSocketGetNextUrl(t *testing.T) {
 			name: "paused sites are still selected (no pause check in socket implementation)",
 			setupSites: func() {
 				setupTestSocketSites()
-				Sites[0].Paused = true // This doesn't prevent selection in socket version
+				Sites[0].Paused = true         // This doesn't prevent selection in socket version
 				Sites[0].activeClaims.Store(0) // Best active claims
-				
+
 				Sites[1].activeClaims.Store(5)
 				Sites[2].activeClaims.Store(3)
 			},
@@ -116,7 +117,7 @@ func TestSocketGetNextUrl(t *testing.T) {
 				setupTestSocketSites()
 				Sites[0].Active = false
 				Sites[0].activeClaims.Store(0) // Best active claims but inactive
-				
+
 				Sites[1].activeClaims.Store(5)
 				Sites[2].activeClaims.Store(3) // Should be selected
 			},
@@ -136,13 +137,13 @@ func TestSocketGetNextUrl(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupSites()
-			
+
 			url, site := GetNextUrl()
-			
+
 			if url != tt.expectedURL {
 				t.Errorf("GetNextUrl() url = %v, want %v", url, tt.expectedURL)
 			}
-			
+
 			gotSite := site != nil
 			if gotSite != tt.expectedSite {
 				t.Errorf("GetNextUrl() site = %v, want %v", gotSite, tt.expectedSite)
@@ -153,24 +154,24 @@ func TestSocketGetNextUrl(t *testing.T) {
 
 func TestSocketSitePauseTimeTracking(t *testing.T) {
 	setupTestSocketSites()
-	Cfg.PauseSiteIfFailureHigherThan = 10 // Low threshold to trigger pause
-	
+	//Cfg.PauseSiteIfFailureHigherThan = 10 // Low threshold to trigger pause
+
 	// Set up high failure rate to trigger pause
 	Sites[0].activeClaims.Store(10)
 	Sites[0].failedClaims.Store(5) // 50% failure rate
-	
+
 	beforePause := time.Now()
 	EvaluateSiteHealth()
 	afterPause := time.Now()
-	
+
 	if !Sites[0].Paused {
 		t.Error("Site should be paused")
 	}
-	
+
 	if Sites[0].pauseCount != 1 {
 		t.Errorf("Pause count = %d, want 1", Sites[0].pauseCount)
 	}
-	
+
 	if Sites[0].lastPausedTime.Before(beforePause) || Sites[0].lastPausedTime.After(afterPause) {
 		t.Error("lastPausedTime not set correctly")
 	}
@@ -178,8 +179,8 @@ func TestSocketSitePauseTimeTracking(t *testing.T) {
 
 func TestSocketIsSiteHealthCheckEnabled(t *testing.T) {
 	// Test the function exists and can be called
-	result := IsSiteHealthCheckEnabled()
-	
+	result := SiteHealthEnabled //IsSiteHealthCheckEnabled()
+
 	// The result should be a boolean
 	if result != true && result != false {
 		t.Errorf("IsSiteHealthCheckEnabled() should return a boolean")
