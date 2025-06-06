@@ -34,7 +34,7 @@ type Site struct {
 
 const PBM_DATA_BUFFER = 16384
 
-var Cfg Config
+// var Cfg Config
 var SiteHealthEnabled = false
 var PauseSiteIfFailureHigherThan = 0
 var Sites []Site
