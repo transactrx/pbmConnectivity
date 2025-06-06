@@ -117,9 +117,9 @@ func NewTlsContext(appCfg Config) (*SessionContext, error) {
 
 	// Initialize sites based on parsed URLs
 	idx := 0
-	for i, url := range Cfg.PbmUrl {
-		active := Cfg.PbmActiveSites[i]
+	for _, url := range Cfg.PbmUrl {
 		for _, port := range Cfg.PbmPorts {
+			active := Cfg.PbmActiveSites[idx]
 			tmp := url + ":" + port
 			ctx.sites[idx] = &Site{URL: tmp, Active: active}
 			idx++

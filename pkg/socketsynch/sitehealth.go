@@ -33,9 +33,7 @@ func EvaluateSiteHealth() {
 				pausable = append(pausable, site)
 			}
 		}
-
 	}
-
 	// Only pause sites if we’ll still have at least one active site remaining
 	for _, site := range pausable {
 		if activeCount <= 1 {
@@ -46,19 +44,6 @@ func EvaluateSiteHealth() {
 		site.lastPausedTime = time.Now()
 		activeCount-- // Decrement as we pause
 		log.Printf("Pausing site %s due to high failure rate (%.2f%%), backoff level %d.\n", site.URL, site.failureRate*100, site.pauseCount)
-	}
-
-	// If only 1 or 0 sites are active, unpause all to ensure traffic can continue
-	if activeCount <= 1 {
-		for i := range Sites {
-			site := &Sites[i]
-			if site.Paused {
-				log.Printf("Unpausing site %s as only one site is available.\n", site.URL)
-				site.Paused = false
-				site.pauseCount = 0
-				site.failedClaims.Store(0)
-			}
-		}
 	}
 }
 
@@ -87,20 +72,15 @@ func GetNextUrl() (string, *Site) {
 		if !site.Active {
 			continue
 		}
-
 		claims := site.activeClaims.Load()
 		failures := site.failedClaims.Load()
 		total := claims + failures
-
 		var failPct float64
 		if total > 0 {
 			failPct = float64(failures) / float64(total)
 		} else {
 			failPct = 0.0
 		}
-
-		//	log.Printf("GetNextUrl site: %s claims: %d bestclaims: %d failpct: %f bestFailPct:%f failures: %d ", site.URL, claims, bestClaims, failPct, bestFailPct, failures)
-
 		// Primary: least claims, then failure pct, then raw failures
 		if claims < bestClaims ||
 			(claims == bestClaims && failPct < bestFailPct) ||
@@ -146,7 +126,6 @@ func StartSiteResetMonitor() {
 					if now.Sub(site.lastPausedTime) >= backoff {
 						log.Printf("Auto-unpausing site %s after backoff (%v).\n", site.URL, backoff)
 						site.Paused = false
-						//site.pauseCount = 0
 					}
 				}
 			}
