@@ -14,9 +14,7 @@ func EvaluateSiteHealth() {
 			activeCount++
 		}
 	}
-
 	var pausable []*Site
-
 	// Identify pausable sites based on failure rate
 	for i := range Sites {
 		site := &Sites[i]
@@ -43,7 +41,6 @@ func EvaluateSiteHealth() {
 		}
 
 	}
-
 	// Pause sites ensuring at least one remains active
 	for _, site := range pausable {
 		if activeCount <= 1 {
@@ -91,10 +88,6 @@ func GetNextUrl() (string, *Site) {
 		if total > 0 {
 			failPct = float64(failures) / float64(total)
 		}
-
-		//log.Printf("GetNextUrl site: %s activeClaims: %d bestActiveClaims: %d failPct: %.2f bestFailPct: %.2f failures: %d",
-		//	site.URL, claims, bestActiveClaims, failPct, bestFailPct, failures)
-
 		// Select site with:
 		// 1. Least activeClaims (load balancing)
 		// 2. Lowest failure percentage
@@ -147,7 +140,6 @@ func StartSiteResetMonitor() {
 					if now.Sub(site.lastPausedTime) >= backoff {
 						log.Printf("Auto-unpausing site %s after backoff (%v).\n", site.URL, backoff)
 						site.Paused = false
-						//site.pauseCount = 0
 					}
 
 				}

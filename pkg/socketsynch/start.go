@@ -78,10 +78,9 @@ func SetupSites(Cfg Config) {
 	// Initialize sites based on parsed URLs & ports
 	idx := 0
 	active := false
-	for i, url := range Cfg.PbmUrls {
-		active = false
-		active = Cfg.PbmActiveSites[i]
+	for _, url := range Cfg.PbmUrls {
 		for _, port := range Cfg.PbmPorts {
+			active = Cfg.PbmActiveSites[idx]
 			tmp := url + ":" + port
 			Sites[idx] = Site{URL: tmp, Active: active}
 			idx++
