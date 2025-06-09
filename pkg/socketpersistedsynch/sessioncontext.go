@@ -188,18 +188,12 @@ func (ctx *SessionContext) StartMonitoring(threshold int, interval time.Duration
 	go func() {
 		for {
 			time.Sleep(interval)
-			ctx.mu.Lock()
 			for i, session := range ctx.sessions {
-				session.mu.Lock()
 				if int(session.errors.Load()) > threshold {
-					session.mu.Unlock()
 					log.Printf("%s monitor thread threshold reached current: %d threshold: %d", session.name, session.errors.Load(), threshold)
 					ctx.DisconnectSession(i)
-				} else {
-					session.mu.Unlock()
 				}
 			}
-			ctx.mu.Unlock()
 		}
 	}()
 }
