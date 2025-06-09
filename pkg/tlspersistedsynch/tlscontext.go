@@ -9,10 +9,10 @@ import (
 	"log"
 	"net"
 	"os"
-	"sync/atomic"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -192,18 +192,12 @@ func (ctx *TlsContext) StartMonitoring(threshold int, interval time.Duration) {
 	go func() {
 		for {
 			time.Sleep(interval)
-			ctx.mu.Lock()
 			for i, session := range ctx.sessions {
-				session.mu.Lock()
 				if int(session.errors.Load()) > threshold {
-					session.mu.Unlock()
 					log.Printf("%s monitor thread threshold reached current: %d threshold: %d", session.name, session.errors.Load(), threshold)
 					ctx.DisconnectSession(i)
-				} else {
-					session.mu.Unlock()
 				}
 			}
-			ctx.mu.Unlock()
 		}
 	}()
 }
@@ -224,7 +218,7 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 				log.Printf("%s reading... status: %s", s.name, tranFoundState)
 				copy(readBuffer, zeroSlice) // Copy the zeroed slice into the buffer
 				bytes, err := s.tlsConn.Read(readBuffer)
-				
+
 				if err != nil || bytes <= 0 {
 					// MRG 8.21.24 let the monitor routine disconnect after error count
 					ctx.DisconnectSession(s.chnl)
