@@ -488,6 +488,25 @@ func (s *TlsSession) IsConnected() bool {
 }
 
 func (s *TlsSession) Read(appCtx context.Context, index int, requestHeader string) ([]byte, error) {
+	for {
+		select {
+		case response := <-s.readCh1:
+			log.Printf("%s %d bytes received status: %s err: %v", s.name, len(response.data), response.status, response.err)
+			if response.status == ParseError {
+				return nil, errors.New("Parse error")
+			}
+			if IsValidResponse(response.data, requestHeader) {
+				return response.data, nil
+			}
+			// Stale response, ignore it and keep waiting til good one or timeout
+			log.Printf("%s read discarded stale/mismatched response", s.name)
+		case <-appCtx.Done():
+			return nil, appCtx.Err()
+		}
+	}
+}
+
+/*func (s *TlsSession) Read(appCtx context.Context, index int, requestHeader string) ([]byte, error) {
 
 	select {
 	case response := <-s.readCh1:
@@ -508,7 +527,7 @@ func (s *TlsSession) Read(appCtx context.Context, index int, requestHeader strin
 		return nil, appCtx.Err() // Return the context error, typically context.DeadlineExceeded
 	}
 }
-
+*/
 // MRG 9/23/24 compare response header vs request header
 // true - valid response
 // false -- issue with incoming header (potential swapped responses)
