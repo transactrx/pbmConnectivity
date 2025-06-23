@@ -151,7 +151,7 @@ func (pc *AsynchFlow) NewTlsContext(appCfg Config) (*TlsContext, error) {
 	ctx := &TlsContext{
 		sessions: make([]*TlsSession, appCfg.PbmOutboundChnls),
 		bitmap:   make([]bool, appCfg.PbmOutboundChnls),
-		sites:    make([]*Site, len(appCfg.PbmUrl)), // Create sites based on the number of URLs
+		sites: make([]*Site, len(appCfg.PbmUrl)*len(pc.Cfg.PbmPorts)), // Create sites based on the number of URLs
 	}
 
 	// Initialize sites based on parsed URLs
