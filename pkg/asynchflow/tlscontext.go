@@ -147,7 +147,6 @@ func createSessionName(i int, siteURL string) string {
 // NewTlsContext creates a new TlsContext with predefined sessions.
 func (pc *AsynchFlow) NewTlsContext(appCfg Config) (*TlsContext, error) {
 	// Parse the PbmUrl string into a slice of URLs
-	//urls := strings.Split(appCfg.PbmUrl, ",")
 
 	ctx := &TlsContext{
 		sessions: make([]*TlsSession, appCfg.PbmOutboundChnls),
@@ -173,7 +172,7 @@ func (pc *AsynchFlow) NewTlsContext(appCfg Config) (*TlsContext, error) {
 	// Assign sessions to sites
 	for i := 0; i < appCfg.PbmOutboundChnls; i++ {
 		site := ctx.sites[i%len(ctx.sites)] // Round-robin assignment of sites
-		addr := site.URL + ":" + appCfg.PbmPort
+		addr := site.URL
 
 		session := &TlsSession{
 			name:    createSessionName(i, site.URL),
