@@ -3,12 +3,13 @@ package asynchflow
 import (
 	"log"
 	"reflect"
+
 	"github.com/transactrx/pbmConnectivity/pkg/helpers"
 )
 
-type AsynchFlow struct {	
-	Cfg    Config 
-	Ctx    *TlsContext
+type AsynchFlow struct {
+	Cfg Config
+	Ctx *TlsContext
 }
 
 //var Ctx *TlsContext
@@ -26,19 +27,20 @@ type Config struct {
 	HeaderCheckOffset int
 	HeaderCheckLen    int
 	EndOfRecordChar   byte
-	// Find End of Message Using ASCII Len in message 
-	MessageLenOffset int 
-	MessageLenWidth  int 
-	DebugEnabled bool
-	MessageLenType int 	// 0 - default - includes header itself 
-						// 1 - skipheader - excludes header 
-	DisconnectFailedCount int 						
-	WaitAfterConnectSeconds  int 
+	// Find End of Message Using ASCII Len in message
+	MessageLenOffset int
+	MessageLenWidth  int
+	DebugEnabled     bool
+	MessageLenType   int // 0 - default - includes header itself
+	// 1 - skipheader - excludes header
+	DisconnectFailedCount        int
+	WaitAfterConnectSeconds      int
+	PauseSiteIfFailureHigherThan int
 }
 
 const PBM_DATA_BUFFER = 16384
 
-//var Cfg Config
+// var Cfg Config
 func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 	var err error
 
@@ -60,15 +62,24 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 	pc.Cfg.MessageLenType = helpers.ParseMessageLenType(cfgMap)
 	pc.Cfg.DisconnectFailedCount = helpers.GetInt(cfgMap, "DisconnectFailedCount", 10)
 	pc.Cfg.WaitAfterConnectSeconds = helpers.GetInt(cfgMap, "WaitAfterConnectSeconds", 6)
+	pc.Cfg.PauseSiteIfFailureHigherThan = helpers.GetInt(cfgMap, "PauseSiteIfFailureHigherThan", 0)
 
 	PrintStructFieldsAndValues(pc.Cfg)
 
-	pc.Ctx, err = NewTlsContext(pc.Cfg)
+	pc.Ctx, err = pc.NewTlsContext(pc.Cfg)
 	if err != nil {
 		log.Fatalf("Start NewTlsContext failed error: %s - critical", err)
 	}
 
 	return nil
+}
+
+func (pc *AsynchFlow) IsSiteHealthCheckEnabled()bool{
+	retValue := false
+	if(len(pc.Cfg.PbmUrl)> 1 && pc.Cfg.PauseSiteIfFailureHigherThan > 0){
+		retValue = true
+	}
+	return retValue
 }
 
 // func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
@@ -148,7 +159,7 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 // 		//pc.Cfg.PbmQueueTimeOut = tmp
 // 	} else {
 // 		log.Printf("Start site(s) status not Provided failed")
-// 	}	
+// 	}
 // 	tmpBool, ok1 = cfgMap["headerCheck"].(bool)
 // 	if ok1 {
 // 		pc.Cfg.HeaderCheck = tmpBool
@@ -231,15 +242,15 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 // 		if tmp == "INCLUDELEN" {
 // 			pc.Cfg.MessageLenType = 0
 // 		} else if tmp == "EXCLUDELEN" {
-// 			pc.Cfg.MessageLenType = 1			
-// 		} 
+// 			pc.Cfg.MessageLenType = 1
+// 		}
 // 	} else {
 // 		log.Printf("messageLenType not Provided failed")
-// 	}	
+// 	}
 
 // 	tmp, ok = cfgMap["DisconnectFailedCount"].(string)
 
-// 	pc.Cfg.DisconnectFailedCount = 10 // 10 failure disconnect default value 
+// 	pc.Cfg.DisconnectFailedCount = 10 // 10 failure disconnect default value
 // 	if ok {
 // 		num, err := strconv.Atoi(tmp)
 // 		if err == nil {
@@ -261,10 +272,8 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 // 		log.Printf("WaitAfterConnectSeconds not Provided failed")
 // 	}
 
-	
-
 // 	PrintStructFieldsAndValues(pc.Cfg)
-	
+
 // 	// run TlsContext
 // 	pc.Ctx, err = NewTlsContext(pc.Cfg)
 // 	if err != nil {
@@ -278,7 +287,7 @@ func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
 func PrintStructFieldsAndValues(data interface{}) {
 	val := reflect.ValueOf(data)
 	typ := val.Type()
-	
+
 	for i := 0; i < val.NumField(); i++ {
 		field := typ.Field(i)
 		fieldValue := val.Field(i).Interface()

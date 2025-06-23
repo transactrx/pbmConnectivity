@@ -25,8 +25,14 @@ const (
 )
 
 type Site struct {
-	URL    string
-	Active bool
+	URL            string
+	Active         bool
+	activeClaims   atomic.Int32 // Tracks # of claims awaiting responses
+	failedClaims   atomic.Int32
+	Paused         bool
+	pauseCount     int       // number of consecutive pauses
+	lastPausedTime time.Time // timestamp of the last pause
+	failureRate    float64
 }
 
 type Response struct {
@@ -52,6 +58,7 @@ type TlsSession struct {
 	appConfig Config
 	chnl      int
 	//errors    int
+	site      *Site
 
 	activeClaims atomic.Int32 // Tracks # of claims awaiting responses
 	errorCount   atomic.Int32 // Tracks total errors
@@ -88,7 +95,7 @@ type TlsContext struct {
 	sessions  []*TlsSession
 	bitmap    []bool
 	mu        sync.Mutex
-	lastUsed  uint32
+	lastUsed  int
 	sites     []*Site
 	tcpDialer *net.Dialer
 }
@@ -138,7 +145,7 @@ func createSessionName(i int, siteURL string) string {
 }
 
 // NewTlsContext creates a new TlsContext with predefined sessions.
-func NewTlsContext(appCfg Config) (*TlsContext, error) {
+func (pc *AsynchFlow) NewTlsContext(appCfg Config) (*TlsContext, error) {
 	// Parse the PbmUrl string into a slice of URLs
 	//urls := strings.Split(appCfg.PbmUrl, ",")
 
@@ -185,6 +192,9 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 
 	// Start monitoring with a threshold of 5 errors and a check interval of 10 seconds
 	ctx.StartMonitoring(appCfg.DisconnectFailedCount, 10*time.Second)
+	if pc.IsSiteHealthCheckEnabled() {
+		ctx.StartSiteResetMonitor()
+	}
 
 	return ctx, nil
 }
@@ -201,6 +211,7 @@ func (ctx *TlsContext) IncrementError(index int) {
 	// ctx.sessions[index].mu.Lock()
 	// ctx.sessions[index].errors++
 	// ctx.sessions[index].mu.Unlock()
+	ctx.sessions[index].site.failedClaims.Add(1)
 	ctx.sessions[index].errorCount.Add(int32(1))
 }
 
@@ -635,7 +646,7 @@ func (ctx *TlsContext) FindLeastBusyChnl() (*TlsSession, int, error) {
 		}
 		outstanding := s.activeClaims.Load()
 		if s.appConfig.DebugEnabled {
-			log.Printf("%s active claims chhl: %d activeClaims: %d ", s.name, s.chnl, s.activeClaims)
+			log.Printf("%s active claims chhl: %d activeClaims: %d ", s.name, s.chnl, &s.activeClaims)
 		}
 
 		if outstanding < minClaims {
@@ -650,22 +661,55 @@ func (ctx *TlsContext) FindLeastBusyChnl() (*TlsSession, int, error) {
 	}
 }
 
-func (ctx *TlsContext) FindConnection() (*TlsSession, int, error) {
-	n := len(ctx.sessions)
-	if n == 0 {
-		return nil, -1, errors.New("no sessions available")
-	}
+func (pc *AsynchFlow) FindConnection() (*TlsSession, int, error) {
+	// n := len(ctx.sessions)
+	// if n == 0 {
+	// 	return nil, -1, errors.New("no sessions available")
+	// }
+	
+	tmp, _ := strconv.Atoi(pc.Cfg.PbmQueueTimeOut)
+	maxTime := time.Duration(tmp)
+	waitDuration := maxTime * time.Second
+	const retryInterval = 100 * time.Millisecond
 
-	start := int(atomic.LoadUint32(&ctx.lastUsed)) // Read last used index atomically
-	for i := 0; i < n; i++ {
-		index := (start + i) % n
-		if ctx.sessions[index].IsConnected() {
-			atomic.StoreUint32(&ctx.lastUsed, uint32(index+1)) // Update safely
-			return ctx.sessions[index], index, nil
+	startTime := time.Now()
+	if pc.Cfg.PauseSiteIfFailureHigherThan > 0 {
+		pc.EvaluateSiteHealth()
+	}
+	
+	// start := int(atomic.LoadUint32(&ctx.lastUsed)) // Read last used index atomically
+	// for i := 0; i < n; i++ {
+	// 	index := (start + i) % n
+	// 	if ctx.sessions[index].IsConnected() {
+	// 		atomic.StoreUint32(&pc.Ctx.lastUsed, uint32(index+1)) // Update safely
+	// 		return ctx.sessions[index], index, nil
+	// 	}
+	// }
+
+	for {
+		pc.Ctx.mu.Lock()
+		for i := 0; i < len(pc.Ctx.sessions); i++ {
+			index := (pc.Ctx.lastUsed + i) % len(pc.Ctx.sessions)
+			site := pc.Ctx.sessions[index].site
+			if !pc.Ctx.bitmap[index] && pc.Ctx.sessions[index].IsConnected() && !site.IsPaused() {
+				pc.Ctx.bitmap[index] = true
+				pc.Ctx.lastUsed = index + 1 // Update the last used index
+				pc.Ctx.mu.Unlock()
+				return pc.Ctx.sessions[index], index, nil
+			}
 		}
-	}
+		pc.Ctx.mu.Unlock()
 
-	return nil, -1, errors.New("no available connections")
+		elapsed := time.Since(startTime)
+		if elapsed > waitDuration {
+			log.Printf("TlsContext FindConnection failed to find chnl - timer expired after %v", elapsed)
+			return nil, -1, fmt.Errorf("no available connection after waiting for %v seconds", maxTime)
+		}
+
+		// Wait before trying again
+		time.Sleep(retryInterval)
+	}
+	//return nil, -1, errors.New("no available connections")
 }
 
 // ReleaseConnection releases a connection, making it available again.
