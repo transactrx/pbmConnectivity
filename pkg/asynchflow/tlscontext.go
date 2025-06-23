@@ -155,12 +155,15 @@ func (pc *AsynchFlow) NewTlsContext(appCfg Config) (*TlsContext, error) {
 		sites:    make([]*Site, len(appCfg.PbmUrl)), // Create sites based on the number of URLs
 	}
 
-	activeSite := false
 	// Initialize sites based on parsed URLs
-	for i, url := range appCfg.PbmUrl {
-		activeSite = false
-		activeSite = appCfg.PbmActiveSites[i]
-		ctx.sites[i] = &Site{URL: url, Active: activeSite}
+	idx := 0
+	for _, url := range pc.Cfg.PbmUrl {
+		for _, port := range pc.Cfg.PbmPorts {
+			active := pc.Cfg.PbmActiveSites[idx]
+			tmp := url + ":" + port
+			ctx.sites[idx] = &Site{URL: tmp, Active: active}
+			idx++
+		}
 	}
 
 	tlsConfig := &tls.Config{
