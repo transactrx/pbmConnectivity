@@ -61,14 +61,18 @@ func (ctx *SessionContext) CheckSites() {
 	now := time.Now()
 	for i := range ctx.sites {
 		site := ctx.sites[i]
-		log.Printf("Site[%d]: %v", i, site)
+		if Cfg.DebugEnabled {
+			log.Printf("Site[%d]: %v", i, site)
+		}
 
-		site.failedClaims.Store(0)
-		site.activeClaims.Store(0)
-		site.failureRate = 0
+		if !site.Paused {
+			site.failedClaims.Store(0)
+			site.activeClaims.Store(0)
+			site.failureRate = 0
+		}
 
 		if site.Paused {
-			backoff := baseBackoff * time.Duration(1<<site.pauseCount)
+			backoff := baseBackoff * time.Duration(1<<(site.pauseCount-1))
 			if backoff > maxBackoff {
 				backoff = maxBackoff
 			}
