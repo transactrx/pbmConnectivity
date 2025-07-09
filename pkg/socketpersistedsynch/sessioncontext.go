@@ -462,23 +462,25 @@ func (s *SocketSession) IsConnected() bool {
 
 func (s *SocketSession) Read(appCtx context.Context, index int, requestHeader string) ([]byte, error) {
 
-	select {
-	case response := <-s.readCh1:
-		log.Printf("%s %d bytes received status: %s err: %v", s.name, len(response.data), response.status, response.err)
-		if response.status != ParseError {
-			validResponse := IsValidResponse(response.data, requestHeader)
-			if !validResponse {
-				return nil, errors.New("Mismatch request/response")
+	for {
+		select {
+		case response := <-s.readCh1:
+			log.Printf("%s %d bytes received status: %s err: %v", s.name, len(response.data), response.status, response.err)
+			if response.status != ParseError {
+				validResponse := IsValidResponse(response.data, requestHeader)
+				if validResponse {
+					return response.data, nil
+				}
+				// Stale response, ignore it and keep waiting til good one or timeout
+				log.Printf("%s read discarded stale/mismatched response", s.name)
 			} else {
-				return response.data, nil
+				return nil, errors.New("Parse error")
 			}
-		} else {
-			return nil, errors.New("Parse error")
-		}
 
-	case <-appCtx.Done():
-		//ctx.IncrementError(index)
-		return nil, appCtx.Err() // Return the context error, typically context.DeadlineExceeded
+		case <-appCtx.Done():
+			//ctx.IncrementError(index)
+			return nil, appCtx.Err() // Return the context error, typically context.DeadlineExceeded
+		}
 	}
 }
 
