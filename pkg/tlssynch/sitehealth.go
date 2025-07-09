@@ -4,6 +4,7 @@ import (
 	"log"
 	"math"
 	"time"
+	"fmt"
 )
 
 func EvaluateSiteHealth() {
@@ -125,15 +126,17 @@ func StartSiteResetMonitor() {
 			now := time.Now()
 			for i := range Sites {
 				site := &Sites[i]
-				log.Printf("Site[%d]: %v", i, site)
+				log.Printf("%s", site.PrintStats())
 
-				site.failedClaims.Store(0)
-				site.activeClaims.Store(0)
-				site.totalClaims.Store(0)
-				site.failureRate = 0
+				if !site.Paused {
+					site.failedClaims.Store(0)
+					site.activeClaims.Store(0)
+					site.totalClaims.Store(0)
+					site.failureRate = 0
+				}
 
 				if site.Paused {
-					backoff := baseBackoff * time.Duration(1<<site.pauseCount)
+					backoff := baseBackoff * time.Duration(1<<(site.pauseCount-1))
 					if backoff > maxBackoff {
 						backoff = maxBackoff
 					}
@@ -146,4 +149,27 @@ func StartSiteResetMonitor() {
 			}
 		}
 	}()
+}
+
+func (s *Site) PrintStats() string {
+	line := ""
+	if s == nil {
+		return ""
+	}
+
+	activeInt := 0
+	pauseInt := 0
+	if s.Active {
+		activeInt = 1
+	}
+	if s.Paused {
+		pauseInt = 1
+	}
+	if !s.lastPausedTime.IsZero() {
+		line = fmt.Sprintf("pbmsitestats url: %s active: %d inprocess: %d failed: %d paused: %d pausecount: %d failurerate: %f lastpaused: %s", s.URL, activeInt, s.activeClaims.Load(), s.failedClaims.Load(), pauseInt, s.pauseCount, s.failureRate, s.lastPausedTime)
+	} else {
+		line = fmt.Sprintf("pbmsitestats url: %s active: %d inprocess: %d failed: %d paused: %d pausecount: %d failurerate: %f lastpaused: never", s.URL, activeInt, s.activeClaims.Load(), s.failedClaims.Load(), pauseInt, s.pauseCount, s.failureRate)
+	}
+
+	return line
 }

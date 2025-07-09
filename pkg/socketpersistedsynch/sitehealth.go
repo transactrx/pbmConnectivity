@@ -21,7 +21,10 @@ func (ctx *SessionContext) EvaluateSiteHealth() {
 			activeCount++
 		}
 
-		log.Printf("url: %s claims: %d paused: %t failures: %d Cfg.PauseSiteIfFailureHigherThan: %d", site.URL, claims, site.Paused, failures, Cfg.PauseSiteIfFailureHigherThan)
+		if Cfg.DebugEnabled {
+			log.Printf("url: %s claims: %d paused: %t failures: %d Cfg.PauseSiteIfFailureHigherThan: %d", site.URL, claims, site.Paused, failures, Cfg.PauseSiteIfFailureHigherThan)
+		}
+
 		if claims >= 10 && !site.Paused {
 			failureRate = (float64(failures) / float64(claims)) * 100
 			if failureRate > float64(Cfg.PauseSiteIfFailureHigherThan) {
