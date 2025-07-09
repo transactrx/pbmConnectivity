@@ -87,15 +87,12 @@ func (ctx *TlsContext) CheckSites() {
 	for i := range ctx.sites {
 		site := ctx.sites[i]
 		log.Printf("%s", site.PrintStats())
-		
-		if !site.Paused {
-			site.failedClaims.Store(0)
-			site.activeClaims.Store(0)
-			site.failureRate = 0
-		}
+		site.failedClaims.Store(0)
+		site.activeClaims.Store(0)
+		site.failureRate = 0
 
 		if site.Paused {
-			backoff := baseBackoff * time.Duration(1<<(site.pauseCount-1))
+			backoff := baseBackoff * time.Duration(1<<site.pauseCount)
 			if backoff > maxBackoff {
 				backoff = maxBackoff
 			}
