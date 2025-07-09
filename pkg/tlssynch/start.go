@@ -20,6 +20,7 @@ type Config struct {
 	TlsSplitHandshake            bool
 	PbmActiveSites               []bool
 	PauseSiteIfFailureHigherThan int
+	DebugEnabled                 bool
 }
 type Site struct {
 	URL            string
@@ -34,6 +35,7 @@ type Site struct {
 }
 
 const PBM_DATA_BUFFER = 16384
+
 var Cfg Config
 var Sites []Site
 
@@ -47,6 +49,7 @@ func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
 	Cfg.PbmInsecureSkipVerify = helpers.GetBoolWithDefault(cfgMap, "pbmInsecureSkipVerify", false)
 	Cfg.TlsSplitHandshake = helpers.GetBoolWithDefault(cfgMap, "TlsSplitHandshake", true)
 	Cfg.PauseSiteIfFailureHigherThan = helpers.GetIntWithDefault(cfgMap, "PauseSiteIfFailureHigherThan", 0)
+	Cfg.DebugEnabled = helpers.GetBool(cfgMap, "debugEnabled", false)
 
 	SetupSites()
 
@@ -59,9 +62,9 @@ func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
 	return nil
 }
 
-func IsSiteHealthCheckEnabled()bool{
+func IsSiteHealthCheckEnabled() bool {
 	retValue := false
-	if(len(Cfg.PbmUrl)> 1 && Cfg.PauseSiteIfFailureHigherThan > 0){
+	if len(Cfg.PbmUrl) > 1 && Cfg.PauseSiteIfFailureHigherThan > 0 {
 		retValue = true
 	}
 	return retValue
@@ -69,7 +72,7 @@ func IsSiteHealthCheckEnabled()bool{
 
 func SetupSites() {
 	activeSite := false
-	// pbmurl has this syntax pbmurl:  site1,site2,sitex 
+	// pbmurl has this syntax pbmurl:  site1,site2,sitex
 	urlSites := strings.Split(Cfg.PbmUrl, ",")
 	Sites = make([]Site, len(urlSites))
 	// Initialize sites based on parsed URLs
