@@ -114,12 +114,14 @@ func StartSiteResetMonitor() {
 				site := &Sites[i]
 				log.Printf("Site pointer: %p Site[%d]: %v", site, i, site)
 
-				site.failedClaims.Store(0)
-				site.activeClaims.Store(0)
-				site.failureRate = 0
+				if !site.Paused {
+					site.failedClaims.Store(0)
+					site.activeClaims.Store(0)
+					site.failureRate = 0
+				}
 
 				if site.Paused {
-					backoff := baseBackoff * time.Duration(1<<site.pauseCount)
+					backoff := baseBackoff * time.Duration(1<<(site.pauseCount-1))
 					if backoff > maxBackoff {
 						backoff = maxBackoff
 					}
