@@ -66,9 +66,9 @@ func (pc *SocketPersistedSyncConnect) Start(cfgMap map[string]interface{}) error
 
 	PrintStructFieldsAndValues(Cfg)
 
-	Ctx, err = NewTlsContext(Cfg)
+	Ctx, err = NewSessionContext(Cfg)
 	if err != nil {
-		log.Printf("Start NewTlsContext failed error: %s - critical", err)
+		log.Printf("Start NewSessionContext failed error: %s - critical", err)
 		panic(err)
 	}
 

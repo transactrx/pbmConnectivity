@@ -1,10 +1,10 @@
 package tlssynch
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"time"
-	"fmt"
 )
 
 func EvaluateSiteHealth() {
@@ -126,7 +126,9 @@ func StartSiteResetMonitor() {
 			now := time.Now()
 			for i := range Sites {
 				site := &Sites[i]
-				log.Printf("%s", site.PrintStats())
+				if Cfg.DebugEnabled {
+					log.Printf("%s", site.PrintStats())
+				}
 
 				if !site.Paused {
 					site.failedClaims.Store(0)

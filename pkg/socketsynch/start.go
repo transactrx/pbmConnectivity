@@ -1,10 +1,11 @@
 package socketsynch
 
 import (
-	"github.com/transactrx/pbmConnectivity/pkg/helpers"
 	"log"
 	"sync/atomic"
 	"time"
+
+	"github.com/transactrx/pbmConnectivity/pkg/helpers"
 )
 
 type SocketSynchConnect struct {
@@ -15,11 +16,11 @@ type Config struct {
 	PbmPort                      string
 	PbmReceiveTimeOut            string
 	PbmInsecureSkipVerify        bool
-	TlsSplitHandshake            bool
 	PbmUrls                      []string
 	PbmPorts                     []string
 	PbmActiveSites               []bool
 	PauseSiteIfFailureHigherThan int
+	DebugEnabled                 bool
 }
 type Site struct {
 	URL            string
@@ -49,6 +50,7 @@ func (pc *SocketSynchConnect) Start(cfgMap map[string]interface{}) error {
 	pc.Cfg.PbmPorts = helpers.GetStringSlice(cfgMap, "pbmPort")
 	pc.Cfg.PbmReceiveTimeOut = helpers.GetString(cfgMap, "pbmReceiveTimeOut")
 	pc.Cfg.PauseSiteIfFailureHigherThan = helpers.GetIntWithDefault(cfgMap, "PauseSiteIfFailureHigherThan", 0)
+	pc.Cfg.DebugEnabled = helpers.GetBool(cfgMap, "debugEnabled", false)
 
 	//log.Printf("Site information %v len(sites) %d", Sites, len(Sites))
 	log.Printf("Start: configuration: %v", pc.Cfg)
@@ -57,7 +59,7 @@ func (pc *SocketSynchConnect) Start(cfgMap map[string]interface{}) error {
 		SiteHealthEnabled = IsSiteHealthCheckEnabled(pc.Cfg)
 		PauseSiteIfFailureHigherThan = pc.Cfg.PauseSiteIfFailureHigherThan
 		if SiteHealthEnabled {
-			StartSiteResetMonitor()
+			pc.StartSiteResetMonitor()
 		}
 	}
 

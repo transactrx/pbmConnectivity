@@ -195,7 +195,7 @@ func (pc *AsynchFlow) NewTlsContext(appCfg Config) (*TlsContext, error) {
 	// Start monitoring with a threshold of 5 errors and a check interval of 10 seconds
 	ctx.StartMonitoring(appCfg.DisconnectFailedCount, 10*time.Second)
 	if pc.IsSiteHealthCheckEnabled() {
-		ctx.StartSiteResetMonitor()
+		pc.StartSiteResetMonitor()
 	}
 
 	return ctx, nil

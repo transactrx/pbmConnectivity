@@ -86,8 +86,10 @@ func (ctx *TlsContext) CheckSites() {
 	now := time.Now()
 	for i := range ctx.sites {
 		site := ctx.sites[i]
-		log.Printf("%s", site.PrintStats())
-
+		if Cfg.DebugEnabled {
+			log.Printf("%s", site.PrintStats())
+		}
+		
 		if !site.Paused { // only reset stats if site is not paused
 			site.failedClaims.Store(0)
 			site.activeClaims.Store(0)

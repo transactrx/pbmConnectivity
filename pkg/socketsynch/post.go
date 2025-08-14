@@ -1,11 +1,12 @@
 package socketsynch
 
 import (
-	"github.com/transactrx/ncpdpDestination/pkg/pbmlib"
 	"log"
 	"net"
 	"strconv"
 	"time"
+
+	"github.com/transactrx/ncpdpDestination/pkg/pbmlib"
 )
 
 func (pc *SocketSynchConnect) Post(claim []byte, header map[string][]string) ([]byte, map[string][]string, pbmlib.ErrorInfo) {
@@ -98,8 +99,8 @@ func Connect(tid string, urlOverride string, cfg Config) (net.Conn, pbmlib.Error
 		return nil, pbmlib.ErrorCode.TRX02
 	}
 	elapsed := time.Since(start) // Calculate elapsed time
-	log.Printf("socketsynch.connect tid: %s ok tls handshake duration: %d ms url: %s", tid, elapsed.Milliseconds(), address)
-	//log.Printf("socketsynch.connect tid: %s tls handshake duration: %d ms url: %s", tid,elapsed.Milliseconds(),address)
+	log.Printf("socketsynch.connect tid: %s ok tcp handshake duration: %d ms url: %s", tid, elapsed.Milliseconds(), address)
+	//log.Printf("socketsynch.connect tid: %s tcp handshake duration: %d ms url: %s", tid,elapsed.Milliseconds(),address)
 	return conn, pbmlib.ErrorCode.TRX00
 }
 
