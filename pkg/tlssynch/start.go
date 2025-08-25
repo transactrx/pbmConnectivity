@@ -40,7 +40,7 @@ var Cfg Config
 var Sites []Site
 
 func (pc *TLSSyncConnect) Start(cfgMap map[string]interface{}) error {
-	log.Printf("TLSSyncConnect::Start")
+	log.Printf("TLSSynchConnect::Start")
 
 	Cfg.PbmActiveSites = helpers.GetBoolSlice(cfgMap, "pbmActiveSites")
 	Cfg.PbmUrl = helpers.GetString(cfgMap, "pbmUrl")

@@ -42,7 +42,7 @@ const PBM_DATA_BUFFER = 16384
 var Cfg Config
 
 func (pc *SocketPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
-
+	log.Printf("SocketPersistedSynchConnect::Start")
 	var err error
 
 	Cfg.PbmUrl = helpers.GetStringSlice(cfgMap, "pbmUrl")
