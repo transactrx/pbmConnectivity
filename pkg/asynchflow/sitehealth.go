@@ -71,22 +71,24 @@ func (s *Site) PrintStats() string {
 	return line
 }
 
-func (ctx *TlsContext) StartSiteResetMonitor() {
+func (pc *AsynchFlow) StartSiteResetMonitor() {
 	go func() {
 		for {
 			time.Sleep(1 * time.Minute) // check more frequently
-			ctx.CheckSites()
+			pc.CheckSites()
 		}
 	}()
 }
 
-func (ctx *TlsContext) CheckSites() {
+func (pc *AsynchFlow) CheckSites() {
 	baseBackoff := 2 * time.Minute
 	maxBackoff := 30 * time.Minute
 	now := time.Now()
-	for i := range ctx.sites {
-		site := ctx.sites[i]
-		log.Printf("%s", site.PrintStats())
+	for i := range pc.Ctx.sites {
+		site := pc.Ctx.sites[i]
+		if pc.Cfg.DebugEnabled {
+			log.Printf("%s", site.PrintStats())
+		}
 		
 		if !site.Paused {
 			site.failedClaims.Store(0)

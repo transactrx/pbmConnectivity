@@ -3,6 +3,7 @@ package socketpersistedsynch
 import (
 	"log"
 	"time"
+	"fmt"
 )
 
 func (ctx *SessionContext) EvaluateSiteHealth() {
@@ -49,6 +50,29 @@ func (s *Site) IsPaused() bool {
 	return s.Paused
 }
 
+func (s *Site) PrintStats() string {
+	line := ""
+	if s == nil {
+		return ""
+	}
+
+	activeInt := 0
+	pauseInt := 0
+	if s.Active {
+		activeInt = 1
+	}
+	if s.Paused {
+		pauseInt = 1
+	}
+	if !s.lastPausedTime.IsZero() {
+		line = fmt.Sprintf("pbmsitestats url: %s active: %d inprocess: %d failed: %d paused: %d pausecount: %d failurerate: %f lastpaused: %s", s.URL, activeInt, s.activeClaims.Load(), s.failedClaims.Load(), pauseInt, s.pauseCount, s.failureRate, s.lastPausedTime)
+	} else {
+		line = fmt.Sprintf("pbmsitestats url: %s active: %d inprocess: %d failed: %d paused: %d pausecount: %d failurerate: %f lastpaused: never", s.URL, activeInt, s.activeClaims.Load(), s.failedClaims.Load(), pauseInt, s.pauseCount, s.failureRate)
+	}
+
+	return line
+}
+
 func (ctx *SessionContext) StartSiteResetMonitor(frequency time.Duration) {
 	go func() {
 		for {
@@ -65,7 +89,7 @@ func (ctx *SessionContext) CheckSites() {
 	for i := range ctx.sites {
 		site := ctx.sites[i]
 		if Cfg.DebugEnabled {
-			log.Printf("Site[%d]: %v", i, site)
+			log.Printf("%s", site.PrintStats())
 		}
 
 		if !site.Paused {

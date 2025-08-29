@@ -43,6 +43,7 @@ const PBM_DATA_BUFFER = 16384
 
 // var Cfg Config
 func (pc *AsynchFlow) Start(cfgMap map[string]interface{}) error {
+	log.Printf("TLSAsynchConnect::Start")
 	var err error
 
 	pc.Cfg.PbmUrl = helpers.GetStringSlice(cfgMap, "pbmUrl")

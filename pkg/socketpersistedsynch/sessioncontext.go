@@ -32,7 +32,7 @@ type Response struct {
 	status Status
 }
 
-// SocketSession represents a single TLS session.
+// SocketSession represents a single socket session.
 type SocketSession struct {
 	name      string
 	address   string
@@ -49,7 +49,7 @@ type SocketSession struct {
 	site      *Site
 }
 
-// SessionContext manages multiple TLS sessions.
+// SessionContext manages multiple socket sessions.
 type SessionContext struct {
 	sessions  []*SocketSession
 	bitmap    []bool
@@ -103,15 +103,14 @@ func createSessionName(i int, siteURL string) string {
 	return tmpName
 }
 
-// NewTlsContext creates a new TlsContext with predefined sessions.
-func NewTlsContext(appCfg Config) (*SessionContext, error) {
+// NewSessionContext creates a new SessionContext with predefined sessions.
+func NewSessionContext(appCfg Config) (*SessionContext, error) {
 	// Parse the PbmUrl string into a slice of URLs
 	//urls := strings.Split(appCfg.PbmUrl, ",")
 
 	ctx := &SessionContext{
 		sessions: make([]*SocketSession, appCfg.PbmOutboundChnls),
 		bitmap:   make([]bool, appCfg.PbmOutboundChnls),
-		//sites:    make([]*Site, len(appCfg.PbmUrl)), // Create sites based on the number of URLs
 		sites: make([]*Site, len(appCfg.PbmUrl)*len(Cfg.PbmPorts)),
 	}
 
@@ -198,7 +197,7 @@ func (ctx *SessionContext) StartMonitoring(threshold int, interval time.Duration
 	}()
 }
 
-// handleConnection handles reading and writing for a TLS session.
+// handleConnection handles reading and writing for a Socket session.
 func (s *SocketSession) handleConnection(ctx *SessionContext) {
 	readBuffer := make([]byte, PBM_DATA_BUFFER)
 	tmpBuffer := make([]byte, PBM_DATA_BUFFER)
@@ -549,7 +548,7 @@ func (ctx *SessionContext) FindConnection() (*SocketSession, int, error) {
 
 		elapsed := time.Since(startTime)
 		if elapsed > waitDuration {
-			log.Printf("TlsContext FindConnection failed to find chnl - timer expired after %v", elapsed)
+			log.Printf("SessionContext FindConnection failed to find chnl - timer expired after %v", elapsed)
 			return nil, -1, fmt.Errorf("no available connection after waiting for %v seconds", maxTime)
 		}
 
@@ -574,9 +573,9 @@ func (ctx *SessionContext) Write(index int, data []byte) error {
 	return nil
 }
 
-// Close closes all TLS sessions.
+// Close closes all socket sessions.
 func (ctx *SessionContext) Close() {
-	log.Printf("TlsContext Close running...")
+	log.Printf("SessionContext Close running...")
 	for _, session := range ctx.sessions {
 		log.Printf("sending signal to chnl %d", session.chnl)
 		session.closeCh <- true
