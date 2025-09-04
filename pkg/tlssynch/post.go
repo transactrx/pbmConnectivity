@@ -74,10 +74,51 @@ func (pc *TLSSyncConnect) Post(claim []byte, header map[string][]string) ([]byte
 			DecreaseActiveClaims(site)
 			return responseBuffer, nil, err
 		}
+
+		if !IsValidResponse(responseBuffer, header) {
+			return responseBuffer, nil, pbmlib.ErrorCode.TRX11
+		}
 	}
 	log.Printf("tlssynch.post tid: %s responsedata(16): %.16s", tid, responseBuffer)
 	DecreaseActiveClaims(site)
 	return responseBuffer, nil, pbmlib.ErrorCode.TRX00
+}
+
+func IsValidResponse(response []byte, reqHeader map[string][]string) bool {
+	reqTracking := ""
+	headerCheckOffset := 0
+	headerCheckLen := 0
+
+	if values, ok := reqHeader["headerValueToCheck"]; ok && len(values) > 0 {
+		reqTracking = values[0]
+	}
+	if values, ok := reqHeader["headerCheckOffset"]; ok && len(values) > 0 {
+		headerCheckOffset, _ = strconv.Atoi(values[0])
+	}
+	if values, ok := reqHeader["headerCheckLen"]; ok && len(values) > 0 {
+		headerCheckLen, _ = strconv.Atoi(values[0])
+	}
+
+	if len(response) < headerCheckOffset+headerCheckLen {
+		log.Printf("ValidateResponse failed mismatch FULLresp: '%s' requestTracking: '%s'", string(response), reqTracking)
+		return false
+	}
+
+	if headerCheckLen == 0 {
+		// nothing to check, so move on
+		// log.Printf("Tracking Length is zero.")
+		return true
+	}
+
+	rspTracking := response[headerCheckOffset : headerCheckOffset+headerCheckLen]
+	if reqTracking != string(rspTracking) {
+		log.Printf("ValidateResponse failed mismatch respTracking: '%s' requestTracking: '%s'", rspTracking, reqTracking)
+		return false
+	}
+
+	//log.Printf("Validated Tracking: request '%s' & response '%s'", reqTracking, rspTracking)
+	
+	return true
 }
 
 func DecreaseActiveClaims(site *Site) {
