@@ -17,14 +17,15 @@ import (
 )
 
 type Site struct {
-	URL            string
-	Active         bool
-	activeClaims   atomic.Int32 // Tracks # of claims awaiting responses
-	failedClaims   atomic.Int32
-	Paused         bool
-	pauseCount     int       // number of consecutive pauses
-	lastPausedTime time.Time // timestamp of the last pause
-	failureRate    float64
+	URL             string
+	Active          bool
+	activeClaims    atomic.Int32 // Tracks # of claims awaiting responses
+	failedClaims    atomic.Int32
+	Paused          bool
+	pauseCount      int       // number of consecutive pauses
+	lastPausedTime  time.Time // timestamp of the last pause
+	failureRate     float64
+	ActiveChnlCount int
 }
 
 type Response struct {
@@ -640,4 +641,34 @@ func (ctx *TlsContext) GetConnectionCount() int {
 	}
 
 	return count
+}
+
+func (ctx *TlsContext) GetChnlCountBySite() {
+	ctx.mu.Lock()         // Lock the mutex to ensure thread safety
+	defer ctx.mu.Unlock() // Unlock the mutex after the function is done
+
+	if len(ctx.sessions) == 0 {
+		return
+	}
+
+	cfg := &ctx.sessions[0].appConfig
+	if cfg == nil || len(cfg.PbmUrl) == 0 {
+		// No allow-list: zero out counts and return.
+		for _, s := range ctx.sessions {
+			s.site.ActiveChnlCount = 0
+		}
+		return
+	}
+	for _, site := range ctx.sites {
+		site.ActiveChnlCount = 0
+	}
+
+	for _, url := range ctx.sessions[0].appConfig.PbmUrl {
+		for _, session := range ctx.sessions {
+			if session.site.URL == url && session.connected {
+				session.site.ActiveChnlCount++
+			}
+		}
+	}
+
 }
