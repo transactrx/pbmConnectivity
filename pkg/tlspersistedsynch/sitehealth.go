@@ -3,6 +3,7 @@ package tlspersistedsynch
 import (
 	"fmt"
 	"log"
+	"math/bits"
 	"time"
 )
 
@@ -11,6 +12,8 @@ func (ctx *TlsContext) EvaluateSiteHealth() {
 	var pausable []*Site
 	var failureRate float64
 
+	ctx.GetChnlCountBySite()
+
 	// First pass: count active sites and identify pausable ones
 	for i := range ctx.sites {
 		site := ctx.sites[i]
@@ -18,7 +21,7 @@ func (ctx *TlsContext) EvaluateSiteHealth() {
 		claims := site.activeClaims.Load()
 		failures := site.failedClaims.Load()
 
-		if site.Active && !site.Paused {
+		if site.Active && !site.Paused && site.ActiveChnlCount > 0 {
 			activeCount++
 		}
 		if Cfg.DebugEnabled {
@@ -89,7 +92,7 @@ func (ctx *TlsContext) CheckSites() {
 		if Cfg.DebugEnabled {
 			log.Printf("%s", site.PrintStats())
 		}
-		
+
 		if !site.Paused { // only reset stats if site is not paused
 			site.failedClaims.Store(0)
 			site.activeClaims.Store(0)
@@ -97,7 +100,8 @@ func (ctx *TlsContext) CheckSites() {
 		}
 
 		if site.Paused {
-			backoff := baseBackoff * time.Duration(1<<(site.pauseCount-1)) // start at 2 minutes
+			//			backoff := baseBackoff * time.Duration(1<<(site.pauseCount-1)) // start at 2 minutes
+			backoff := expBackoff(baseBackoff, maxBackoff, site.pauseCount)
 			if backoff > maxBackoff {
 				backoff = maxBackoff
 			}
@@ -107,7 +111,29 @@ func (ctx *TlsContext) CheckSites() {
 			}
 		}
 	}
+}
 
+func expBackoff(base, max time.Duration, pauseCount int) time.Duration {
+	if pauseCount <= 1 { // first pause uses base
+		return base
+	}
+	// Max multiplier we can apply before exceeding max backoff.
+	maxMult := uint64(max / base)
+	if maxMult == 0 {
+		return base // degenerate case: max < base
+	}
+	// floor(log2(maxMult)) gives maximum safe shift.
+	maxShift := bits.Len64(maxMult) - 1
+
+	shift := pauseCount - 1
+	if shift < 0 {
+		shift = 0
+	}
+	if shift > maxShift {
+		shift = maxShift
+	}
+	mult := time.Duration(uint64(1) << shift)
+	return base * mult
 }
 
 func CheckPausableSites(pausable []*Site, activeCount *int) {
