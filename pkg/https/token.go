@@ -28,7 +28,7 @@ type TokenManager struct {
 	httpClient  *http.Client
 	token       *oauth2.Token
 	expiryDelta time.Duration // optional; if zero, fall back to default
-	mu    sync.RWMutex
+	mu          sync.RWMutex
 }
 
 type TokenConfig struct {
@@ -38,6 +38,7 @@ type TokenConfig struct {
 	TokenURL     string
 	HTTPTimeout  time.Duration
 }
+
 var timeNow = time.Now
 
 func (tm *TokenManager) IsValidTokenSettings() bool {
@@ -79,6 +80,7 @@ func (tm *TokenManager) Expired() bool {
 	log.Printf("Now: %v, Token expiry: %v, Adjusted cutoff: %v\n", timeNow(), tm.token.Expiry, tm.token.Expiry.Add(-expiryDelta))
 	return tm.token.Expiry.Add(-expiryDelta).Before(timeNow())
 }
+
 const refreshDelta = 10 * time.Second
 
 func (tm *TokenManager) AutoRefreshToken() {
@@ -96,7 +98,8 @@ func (tm *TokenManager) AutoRefreshToken() {
 			}
 			err = tm.refreshToken()
 			if err != nil {
-				log.Printf("Token refresh failed: %v", err)
+				log.Printf("Token refresh failed: %v waiting 10 seconds before retrying", err)
+				time.Sleep(10 * time.Second)
 			}
 		} else {
 			log.Printf("Token - wait 10 seconds...")
@@ -133,6 +136,7 @@ func (tm *TokenManager) GetToken() string {
 
 	return tm.token.AccessToken
 }
+
 // GetIDToken extracts the raw ID token from the token response.
 func (tm *TokenManager) GetIDToken() string {
 	if tm.token == nil {
