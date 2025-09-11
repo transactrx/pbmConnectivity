@@ -88,8 +88,8 @@ func TestIsValidTokenSettings(t *testing.T) {
 			expected: false,
 		},
 		{
-			name: "all fields empty",
-			config: TokenConfig{},
+			name:     "all fields empty",
+			config:   TokenConfig{},
 			expected: false,
 		},
 	}
@@ -233,7 +233,7 @@ func TestGetIDToken(t *testing.T) {
 		"id_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
 	})
 	tm.token = tokenWithID
-	
+
 	id := tm.GetIDToken()
 	if id != "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." {
 		t.Errorf("GetIDToken() = %v, want JWT token", id)
@@ -407,8 +407,8 @@ func TestGetTokenWithRefresh(t *testing.T) {
 	tm := NewTokenManagerWithConfig(config)
 
 	// Test GetToken with no existing token (should refresh)
-	token := tm.GetToken()
-	if token != "refreshed-token" {
+	token, err := tm.GetToken()
+	if err != nil && token != "refreshed-token" {
 		t.Errorf("GetToken() = %v, want %v", token, "refreshed-token")
 	}
 
@@ -418,9 +418,9 @@ func TestGetTokenWithRefresh(t *testing.T) {
 		AccessToken: "existing-valid-token",
 		Expiry:      future,
 	}
-	
-	token = tm.GetToken()
-	if token != "existing-valid-token" {
+
+	token, err = tm.GetToken()
+	if err != nil && token != "existing-valid-token" {
 		t.Errorf("GetToken() = %v, want %v", token, "existing-valid-token")
 	}
 }
@@ -478,8 +478,8 @@ func TestTokenManagerConcurrency(t *testing.T) {
 	done := make(chan bool, 10)
 	for i := 0; i < 10; i++ {
 		go func() {
-			token := tm.GetToken()
-			if token == "" {
+			token, err := tm.GetToken()
+			if err != nil && token == "" {
 				t.Error("GetToken() returned empty token in concurrent access")
 			}
 			done <- true
