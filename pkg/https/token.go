@@ -3,6 +3,7 @@ package https
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -91,25 +92,25 @@ func (tm *TokenManager) AutoRefreshToken() {
 			expiry := timeNow().Add(expiresIn)
 
 			refreshAfter := time.Until(expiry.Add(-refreshDelta))
-			log.Printf("refreshAfter: %s, expiry: %v", refreshAfter, expiry)
+			log.Printf("AutoRefreshToken refreshAfter: %s, expiry: %v", refreshAfter, expiry)
 
 			if refreshAfter > 0 {
 				time.Sleep(refreshAfter)
 			}
 			err = tm.refreshToken()
 			if err != nil {
-				log.Printf("Token refresh failed: %v waiting 10 seconds before retrying", err)
+				log.Printf("AutoRefreshToken Token refresh failed: %v waiting 10 seconds before retrying", err)
 				time.Sleep(10 * time.Second)
 			}
 		} else {
-			log.Printf("Token - wait 10 seconds...")
+			log.Printf("AutoRefreshToken - waiting 10 seconds...")
 			time.Sleep(10 * time.Second)
 		}
 	}
 }
 
 // GetToken returns a valid access token or an empty string if unavailable.
-func (tm *TokenManager) GetToken() string {
+func (tm *TokenManager) GetToken() (string, error) {
 	tm.mu.RLock()
 	isValid := tm.token != nil && tm.Valid()
 	accessToken := ""
@@ -119,7 +120,7 @@ func (tm *TokenManager) GetToken() string {
 	tm.mu.RUnlock()
 
 	if isValid {
-		return accessToken
+		return accessToken, nil
 	}
 
 	// Now we need to refresh — get write lock
@@ -130,11 +131,11 @@ func (tm *TokenManager) GetToken() string {
 	if tm.token == nil || !tm.Valid() {
 		if err := tm.refreshToken(); err != nil {
 			log.Printf("GetToken: unable to refresh token: %v", err)
-			return ""
+			return "", err
 		}
 	}
 
-	return tm.token.AccessToken
+	return tm.token.AccessToken, nil
 }
 
 // GetIDToken extracts the raw ID token from the token response.
@@ -153,14 +154,14 @@ func (tm *TokenManager) GetIDToken() string {
 // refreshToken performs a client credentials token request and updates the stored token.
 func (tm *TokenManager) refreshToken() error {
 	data := url.Values{}
-	log.Printf("Token type: %v", tm.config.TokenType)
+	log.Printf("RefreshToken Token type: %v", tm.config.TokenType)
 	switch tm.config.TokenType {
 	case ClientCredentials:
 		data.Set("grant_type", "client_credentials")
 	case AuthorizationCode:
 		data.Set("scope", "openid")
 	default:
-		log.Printf("Unsupported token type: %s", tm.config.TokenType)
+		log.Printf("RefreshToken Unsupported token type: %s", tm.config.TokenType)
 	}
 
 	req, err := http.NewRequest(http.MethodPost, tm.config.TokenURL, strings.NewReader(data.Encode()))
@@ -178,14 +179,17 @@ func (tm *TokenManager) refreshToken() error {
 	}
 	defer res.Body.Close()
 
-	tm.processResponse(res)
+	err = tm.processResponse(res)
+	if err != nil {
+		return err
+	}
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("refreshToken: raw response: %s", body)
+	log.Printf("RefreshToken: raw response: %s", body)
 
 	token, err := parseToken(body)
 	if err != nil {
@@ -212,8 +216,10 @@ func basicAuth(username, password string) string {
 }
 
 // processResponse logs HTTP status info.
-func (tm *TokenManager) processResponse(res *http.Response) {
+func (tm *TokenManager) processResponse(res *http.Response) error {
 	if res.StatusCode != http.StatusOK {
 		log.Printf("processResponse: token request failed with status %s", res.Status)
+		return fmt.Errorf("token request failed: %s", res.Status)
 	}
+	return nil
 }
