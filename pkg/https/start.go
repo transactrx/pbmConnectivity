@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"github.com/transactrx/pbmConnectivity/pkg/helpers"
 	"log"
+	"time"
 )
 
 type HTTPPBMConnect struct {
-	Conf RouteInfo
-	TokenMgr* TokenManager
+	Conf     RouteInfo
+	TokenMgr *TokenManager
 }
 
 type Config struct {
@@ -24,7 +25,7 @@ type Config struct {
 	PbmPort               string
 	PbmReceiveTimeOut     string
 	PbmInsecureSkipVerify bool
-	TlsSplitHandshake     bool	
+	TlsSplitHandshake     bool
 }
 type RouteInfo struct {
 	RouteCode string   `json:"routeCode"`
@@ -43,7 +44,8 @@ type Header struct {
 const PBM_DATA_BUFFER = 16384
 
 var Cfg Config
-//var TokenMgr *TokenManager
+
+// var TokenMgr *TokenManager
 var TokenCfg TokenConfig
 
 func (pc *HTTPPBMConnect) Start(cfgMap map[string]interface{}) error {
@@ -59,20 +61,20 @@ func (pc *HTTPPBMConnect) Start(cfgMap map[string]interface{}) error {
 	TokenCfg.TokenURL = helpers.GetString(cfgMap, "tokenUrl")
 	stringTokenType := helpers.GetString(cfgMap, "tokenType")
 	TokenCfg.TokenType, _ = ParseTokenType(stringTokenType)
+	TokenCfg.HTTPTimeout = 5 * time.Second
 	TokenMgr := NewTokenManagerWithConfig(TokenCfg)
 	pc.TokenMgr = TokenMgr
 	if pc.TokenMgr.IsValidTokenSettings() {
-		go GenerateTokens(pc.TokenMgr)	
-		go TokenMgr.AutoRefreshToken()		
+		go GenerateTokens(pc.TokenMgr)
+		go TokenMgr.AutoRefreshToken()
 	}
 	CreateGlobalHttpContext()
 	return nil
 }
 
-func GenerateTokens(TokenMgr *TokenManager)  {
+func GenerateTokens(TokenMgr *TokenManager) {
 	TokenMgr.GetToken()
 }
-
 
 func ParseTokenType(value string) (TokenType, error) {
 	switch value {

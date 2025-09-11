@@ -4,9 +4,10 @@ import (
 	"log"
 
 	"github.com/transactrx/ncpdpDestination/pkg/pbmlib"
-//	"github.com/transactrx/pbmHTTP/pkg/config"
+	//	"github.com/transactrx/pbmHTTP/pkg/config"
 	//"github.com/transactrx/https/pkg/https"
 )
+
 func IsDebugMode() bool {
 	return Cfg.IsDebugMode
 }
@@ -15,22 +16,25 @@ func (hpc HTTPPBMConnect) Post(claim []byte, headers map[string][]string) ([]byt
 
 	//log.Printf("%v",headers)
 	// Inject bearer token if not already present
-	if hpc.TokenMgr != nil && hpc.TokenMgr.IsValidTokenSettings() {		
-		token := hpc.TokenMgr.GetToken() // Ensure this returns a valid/refreshed token
+	if hpc.TokenMgr != nil && hpc.TokenMgr.IsValidTokenSettings() {
+		token, err := hpc.TokenMgr.GetToken() // Ensure this returns a valid/refreshed token
 		if IsDebugMode() {
-			log.Printf("Dynamic Token ON case token value: %s",token)
+			log.Printf("post dynamic Token ON case token value: %s error: %v", token, err)
 		}
-		if token != "" {
+		if err == nil && token != "" {
 			authHeader := Header{
-			Key:          "Authorization",
-			Value:        token,
-			Base64encode: false,
-			Prefix:       "Bearer",
+				Key:          "Authorization",
+				Value:        token,
+				Base64encode: false,
+				Prefix:       "Bearer",
 			}
 			hpc.Conf.Headers = append(hpc.Conf.Headers, authHeader)
+		} else {
+			log.Printf("post dynamic token emtpy or error")
+			return []byte("error in http post"), nil, pbmlib.ErrorCode.TRX15
 		}
-	}else{
-		log.Printf("Dynamic token OFF or Invalid Settings")
+	} else {
+		log.Printf("post dynamic token OFF or Invalid Settings")
 	}
 
 	for pKey, pVal := range headers {
@@ -64,4 +68,3 @@ func (hpc HTTPPBMConnect) Post(claim []byte, headers map[string][]string) ([]byt
 
 	return []byte(resp), nil, errorInfo
 }
-
