@@ -4,10 +4,10 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"github.com/valyala/fasthttp"
 	"log"
 	"strings"
 	"time"
-	"github.com/valyala/fasthttp"
 )
 
 var CustomHttpClient *fasthttp.Client
@@ -20,59 +20,69 @@ func CreateGlobalHttpContext() {
 
 }
 
-func FastPost(body []byte, conf RouteInfo) (string, int, error) {
+func FastPost(body []byte, conf RouteInfo, transmissionId string, appendToUrl bool) (string, int, error) {
 	// Initialize fasthttp.Request and fasthttp.Response
 	req := fasthttp.AcquireRequest()
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseRequest(req)
 	defer fasthttp.ReleaseResponse(resp)
+	url := conf.PbmUrl
+
+	// Pre-append visibility
+	log.Printf("FastPost (pre) tid:%s appendToUrl:%t url:%s", transmissionId, appendToUrl, url)
+
+	// Append as path segment (handles trailing slash)
+	if appendToUrl && transmissionId != "" {
+		base := strings.TrimRight(conf.PbmUrl, "/")
+		url = base + "/" + transmissionId
+	}
+	// FINAL url that will actually be used
+	log.Printf("FastPost (final) route:%s url:%s", conf.RouteCode, url)
 
 	// Set request URL and method
-	log.Printf("Route: %s Sending to URI: %s", conf.RouteCode, conf.PbmUrl)
-	req.SetRequestURI(conf.PbmUrl)
+	if IsDebugMode() {
+		log.Printf("FastPost route: %s sending to url: %s", conf.RouteCode, url)
+	}
+	req.SetRequestURI(url)
 	req.Header.SetMethod("POST")
 
 	// Set timeout if specified
 	if conf.Timeout > 0 {
 		req.SetTimeout(time.Duration(conf.Timeout) * time.Second)
 	}
-
 	var err error
 	for _, header := range conf.Headers {
 		readyHeader := header.Value
-		if(Cfg.IsDebugMode){
-			log.Printf("Fastpost Header  %s: %s prefix: '%s' Base64encode: %t",header.Key,readyHeader,header.Prefix,header.Base64encode)
+		if IsDebugMode() {
+			log.Printf("Fastpost header  %s: %s prefix: '%s' Base64encode: %t", header.Key, readyHeader, header.Prefix, header.Base64encode)
 		}
 		if header.Base64encode {
 			readyHeader, err = encodeAuthorization(header.Value, header.Prefix)
 			if err != nil {
-				return fmt.Sprintf("error encoding api key for route code: %s", conf.RouteCode), 401, err
+				return fmt.Sprintf("Fastpost failed encoding api key for route code: %s", conf.RouteCode), 401, err
 			}
 		} else if len(header.Prefix) > 0 {
 			readyHeader = header.Prefix + " " + readyHeader
 		}
-		if(Cfg.IsDebugMode){
-			log.Printf("Fastpost Header  readyHeader: %s",readyHeader)
+		if IsDebugMode() {
+			log.Printf("Fastpost header  readyHeader: %s", readyHeader)
 		}
 		req.Header.Set(header.Key, readyHeader)
 	}
 
 	if len(req.Header.ContentType()) == 0 {
-		log.Printf("Route Code %s Defaulting the content type to application/EDI-NCPDP as it was not provided", conf.RouteCode)
+		log.Printf("Fastpost route code %s defaulting the content type to application/EDI-NCPDP as it was not provided", conf.RouteCode)
 		req.Header.SetContentType("application/EDI-NCPDP")
 	}
-
 	req.SetBody(body)
-
 	// Perform the request
-	//err = fasthttp.Do(req, resp)
-	err = CustomHttpClient.DoTimeout(req,resp,time.Duration(conf.Timeout*float64(time.Second)))
+	err = CustomHttpClient.DoTimeout(req, resp, time.Duration(conf.Timeout*float64(time.Second)))
 	if err != nil {
 		log.Printf("route code %s error sending request: %v", conf.RouteCode, err)
-		return "error sending request", resp.StatusCode(), err
+		return "Fastpost failed sending request", resp.StatusCode(), err
 	}
 	statusCode := resp.StatusCode()
-	log.Printf("Route code %s got Response Code: %d", conf.RouteCode, statusCode)
+	log.Printf("Fastpost tid: %s route %s http response code: %d", transmissionId, conf.RouteCode, statusCode)
 	return string(resp.Body()), statusCode, nil
 }
 
