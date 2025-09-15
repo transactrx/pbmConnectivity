@@ -36,11 +36,12 @@ type TokenManager struct {
 }
 
 type TokenConfig struct {
-	TokenType    TokenType
-	ClientID     string
-	ClientSecret string
-	TokenURL     string
-	HTTPTimeout  time.Duration
+	TokenGrantType TokenType
+	TokenScope     string
+	ClientID       string
+	ClientSecret   string
+	TokenURL       string
+	HTTPTimeout    time.Duration
 }
 
 var timeNow = time.Now
@@ -155,20 +156,19 @@ func (tm *TokenManager) GetIDToken() string {
 // refreshToken performs a client credentials token request and updates the stored token.
 func (tm *TokenManager) refreshToken() error {
 	data := url.Values{}
-	log.Printf("RefreshToken Token type: %v...", tm.config.TokenType)
-	switch tm.config.TokenType {
+	log.Printf("RefreshToken Token type: %v...", tm.config.TokenGrantType)
+	switch tm.config.TokenGrantType {
 	case ClientCredentials:
 		data.Set("grant_type", "client_credentials")
-		//data.Set("audience", tm.config.ClientID) // optional, depending on your flow
-		data.Set("audience", "https://api-stg.uhg.com/api/cloud/api-management/pmbcoreclaim-externalrxpoint/")
-
 	case AuthorizationCode:
 		data.Set("grant_type", "authorization_code")
-		data.Set("scope", "openid") // optional, depending on your flow
 	case RefreshToken:
 		data.Set("grant_type", "refresh_token")
 	default:
-		log.Printf("RefreshToken Unsupported token type: %s", tm.config.TokenType)
+		log.Printf("RefreshToken Unsupported token type: %s", tm.config.TokenGrantType)
+	}
+	if len(tm.config.TokenScope) > 0 {
+		data.Set("scope", tm.config.TokenScope)
 	}
 
 	req, err := http.NewRequest(http.MethodPost, tm.config.TokenURL, strings.NewReader(data.Encode()))
@@ -192,17 +192,24 @@ func (tm *TokenManager) refreshToken() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("RefreshToken: raw response: %s", body)
+	//log.Printf("RefreshToken: raw response: %s", body)
 	token, err := parseToken(body)
 	if err != nil {
 		return err
 	}
 	tm.token = token
-	parts := strings.Split(tm.token.AccessToken, ".")
-	payload, _ := base64.RawURLEncoding.DecodeString(parts[1])
-	log.Printf("claims: %s", payload) // JSON; confirm "aud"
+
+	if IsDebugMode() {
+		DebugToken(tm.token.AccessToken)
+	}
 	log.Printf("RefreshToken done isValid: %t", tm.Valid())
 	return nil
+}
+
+func DebugToken(accessToken string) {
+	parts := strings.Split(accessToken, ".")
+	payload, _ := base64.RawURLEncoding.DecodeString(parts[1])
+	log.Printf("claims: %s", payload) // JSON; confirm "aud"
 }
 
 // parseToken parses the OAuth2 token from the raw response body.

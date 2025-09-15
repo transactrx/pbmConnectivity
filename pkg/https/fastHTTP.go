@@ -20,25 +20,13 @@ func CreateGlobalHttpContext() {
 
 }
 
-func FastPost(body []byte, conf RouteInfo, transmissionId string, appendToUrl bool) (string, int, error) {
+func FastPost(body []byte, conf RouteInfo, url string) (string, int, error) {
 	// Initialize fasthttp.Request and fasthttp.Response
 	req := fasthttp.AcquireRequest()
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseRequest(req)
 	defer fasthttp.ReleaseResponse(resp)
-	url := conf.PbmUrl
-
-	// Pre-append visibility
-	log.Printf("FastPost (pre) tid:%s appendToUrl:%t url:%s", transmissionId, appendToUrl, url)
-
-	// Append as path segment (handles trailing slash)
-	if appendToUrl && transmissionId != "" {
-		base := strings.TrimRight(conf.PbmUrl, "/")
-		url = base + "/" + transmissionId
-	}
-	// FINAL url that will actually be used
-	log.Printf("FastPost (final) route:%s url:%s", conf.RouteCode, url)
-
+	//log.Printf("FastPost (final) route:%s url:%s", conf.RouteCode, url)
 	// Set request URL and method
 	if IsDebugMode() {
 		log.Printf("FastPost route: %s sending to url: %s", conf.RouteCode, url)
@@ -82,7 +70,7 @@ func FastPost(body []byte, conf RouteInfo, transmissionId string, appendToUrl bo
 		return "Fastpost failed sending request", resp.StatusCode(), err
 	}
 	statusCode := resp.StatusCode()
-	log.Printf("Fastpost tid: %s route %s http response code: %d", transmissionId, conf.RouteCode, statusCode)
+	log.Printf("Fastpost route %s http response code: %d", conf.RouteCode, statusCode)
 	return string(resp.Body()), statusCode, nil
 }
 
