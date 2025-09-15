@@ -22,7 +22,10 @@ type TokenType string
 const (
 	ClientCredentials TokenType = "client_credentials" // service to service interaction - no login needed
 	AuthorizationCode TokenType = "authorization_code" // linked to user login
+	RefreshToken      TokenType = "refresh_token"
 )
+
+const refreshDelta = 10 * time.Second
 
 type TokenManager struct {
 	config      TokenConfig
@@ -33,11 +36,12 @@ type TokenManager struct {
 }
 
 type TokenConfig struct {
-	TokenType    TokenType
-	ClientID     string
-	ClientSecret string
-	TokenURL     string
-	HTTPTimeout  time.Duration
+	TokenGrantType TokenType
+	TokenScope     string
+	ClientID       string
+	ClientSecret   string
+	TokenURL       string
+	HTTPTimeout    time.Duration
 }
 
 var timeNow = time.Now
@@ -81,8 +85,6 @@ func (tm *TokenManager) Expired() bool {
 	log.Printf("Now: %v, Token expiry: %v, Adjusted cutoff: %v\n", timeNow(), tm.token.Expiry, tm.token.Expiry.Add(-expiryDelta))
 	return tm.token.Expiry.Add(-expiryDelta).Before(timeNow())
 }
-
-const refreshDelta = 10 * time.Second
 
 func (tm *TokenManager) AutoRefreshToken() {
 	var err error
@@ -154,14 +156,19 @@ func (tm *TokenManager) GetIDToken() string {
 // refreshToken performs a client credentials token request and updates the stored token.
 func (tm *TokenManager) refreshToken() error {
 	data := url.Values{}
-	log.Printf("RefreshToken Token type: %v", tm.config.TokenType)
-	switch tm.config.TokenType {
+	log.Printf("RefreshToken Token type: %v...", tm.config.TokenGrantType)
+	switch tm.config.TokenGrantType {
 	case ClientCredentials:
 		data.Set("grant_type", "client_credentials")
 	case AuthorizationCode:
-		data.Set("scope", "openid")
+		data.Set("grant_type", "authorization_code")
+	case RefreshToken:
+		data.Set("grant_type", "refresh_token")
 	default:
-		log.Printf("RefreshToken Unsupported token type: %s", tm.config.TokenType)
+		log.Printf("RefreshToken Unsupported token type: %s", tm.config.TokenGrantType)
+	}
+	if len(tm.config.TokenScope) > 0 {
+		data.Set("scope", tm.config.TokenScope)
 	}
 
 	req, err := http.NewRequest(http.MethodPost, tm.config.TokenURL, strings.NewReader(data.Encode()))
@@ -171,14 +178,11 @@ func (tm *TokenManager) refreshToken() error {
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Authorization", "Basic "+basicAuth(tm.config.ClientID, tm.config.ClientSecret))
-
-	log.Println("refreshToken: requesting new token...")
 	res, err := tm.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
-
 	err = tm.processResponse(res)
 	if err != nil {
 		return err
@@ -188,15 +192,24 @@ func (tm *TokenManager) refreshToken() error {
 	if err != nil {
 		return err
 	}
-
-	log.Printf("RefreshToken: raw response: %s", body)
-
+	//log.Printf("RefreshToken: raw response: %s", body)
 	token, err := parseToken(body)
 	if err != nil {
 		return err
 	}
 	tm.token = token
+
+	if IsDebugMode() {
+		DebugToken(tm.token.AccessToken)
+	}
+	log.Printf("RefreshToken done isValid: %t", tm.Valid())
 	return nil
+}
+
+func DebugToken(accessToken string) {
+	parts := strings.Split(accessToken, ".")
+	payload, _ := base64.RawURLEncoding.DecodeString(parts[1])
+	log.Printf("claims: %s", payload) // JSON; confirm "aud"
 }
 
 // parseToken parses the OAuth2 token from the raw response body.

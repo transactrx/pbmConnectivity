@@ -60,7 +60,8 @@ func (pc *HTTPPBMConnect) Start(cfgMap map[string]interface{}) error {
 	TokenCfg.ClientSecret = helpers.GetString(cfgMap, "clientSecret")
 	TokenCfg.TokenURL = helpers.GetString(cfgMap, "tokenUrl")
 	stringTokenType := helpers.GetString(cfgMap, "tokenType")
-	TokenCfg.TokenType, _ = ParseTokenType(stringTokenType)
+	TokenCfg.TokenScope = helpers.GetString(cfgMap, "tokenScope")
+	TokenCfg.TokenGrantType, _ = ParseTokenType(stringTokenType)
 	TokenCfg.HTTPTimeout = 5 * time.Second
 	TokenMgr := NewTokenManagerWithConfig(TokenCfg)
 	pc.TokenMgr = TokenMgr

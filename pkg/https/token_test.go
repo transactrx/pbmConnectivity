@@ -13,17 +13,17 @@ import (
 
 func TestTokenConfig(t *testing.T) {
 	config := TokenConfig{
-		TokenType:    ClientCredentials,
-		ClientID:     "test-client",
-		ClientSecret: "test-secret",
-		TokenURL:     "https://example.com/token",
-		HTTPTimeout:  30 * time.Second,
+		TokenGrantType: ClientCredentials,
+		ClientID:       "test-client",
+		ClientSecret:   "test-secret",
+		TokenURL:       "https://example.com/token",
+		HTTPTimeout:    30 * time.Second,
 	}
 
 	tm := NewTokenManagerWithConfig(config)
 
-	if tm.config.TokenType != ClientCredentials {
-		t.Errorf("TokenType = %v, want %v", tm.config.TokenType, ClientCredentials)
+	if tm.config.TokenGrantType != ClientCredentials {
+		t.Errorf("TokenGrantType = %v, want %v", tm.config.TokenGrantType, ClientCredentials)
 	}
 	if tm.config.ClientID != "test-client" {
 		t.Errorf("ClientID = %v, want %v", tm.config.ClientID, "test-client")
@@ -340,11 +340,11 @@ func TestRefreshToken(t *testing.T) {
 	defer server.Close()
 
 	config := TokenConfig{
-		TokenType:    ClientCredentials,
-		ClientID:     "test-client",
-		ClientSecret: "test-secret",
-		TokenURL:     server.URL,
-		HTTPTimeout:  5 * time.Second,
+		TokenGrantType: ClientCredentials,
+		ClientID:       "test-client",
+		ClientSecret:   "test-secret",
+		TokenURL:       server.URL,
+		HTTPTimeout:    5 * time.Second,
 	}
 
 	tm := NewTokenManagerWithConfig(config)
@@ -370,11 +370,11 @@ func TestRefreshTokenError(t *testing.T) {
 	defer server.Close()
 
 	config := TokenConfig{
-		TokenType:    ClientCredentials,
-		ClientID:     "test-client",
-		ClientSecret: "test-secret",
-		TokenURL:     server.URL,
-		HTTPTimeout:  5 * time.Second,
+		TokenGrantType: ClientCredentials,
+		ClientID:       "test-client",
+		ClientSecret:   "test-secret",
+		TokenURL:       server.URL,
+		HTTPTimeout:    5 * time.Second,
 	}
 
 	tm := NewTokenManagerWithConfig(config)
@@ -397,11 +397,11 @@ func TestGetTokenWithRefresh(t *testing.T) {
 	defer server.Close()
 
 	config := TokenConfig{
-		TokenType:    ClientCredentials,
-		ClientID:     "test-client",
-		ClientSecret: "test-secret",
-		TokenURL:     server.URL,
-		HTTPTimeout:  5 * time.Second,
+		TokenGrantType: ClientCredentials,
+		ClientID:       "test-client",
+		ClientSecret:   "test-secret",
+		TokenURL:       server.URL,
+		HTTPTimeout:    5 * time.Second,
 	}
 
 	tm := NewTokenManagerWithConfig(config)
@@ -446,7 +446,7 @@ func TestTokenTypes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if string(tt.tokenType) != tt.expected {
-				t.Errorf("TokenType %v = %v, want %v", tt.tokenType, string(tt.tokenType), tt.expected)
+				t.Errorf("TokenGrantType %v = %v, want %v", tt.tokenType, string(tt.tokenType), tt.expected)
 			}
 		})
 	}
@@ -465,11 +465,11 @@ func TestTokenManagerConcurrency(t *testing.T) {
 	defer server.Close()
 
 	config := TokenConfig{
-		TokenType:    ClientCredentials,
-		ClientID:     "test-client",
-		ClientSecret: "test-secret",
-		TokenURL:     server.URL,
-		HTTPTimeout:  5 * time.Second,
+		TokenGrantType: ClientCredentials,
+		ClientID:       "test-client",
+		ClientSecret:   "test-secret",
+		TokenURL:       server.URL,
+		HTTPTimeout:    5 * time.Second,
 	}
 
 	tm := NewTokenManagerWithConfig(config)
