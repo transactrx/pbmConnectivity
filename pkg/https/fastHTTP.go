@@ -28,9 +28,9 @@ func FastPost(body []byte, conf RouteInfo, url string) (string, int, error) {
 	defer fasthttp.ReleaseResponse(resp)
 	//log.Printf("FastPost (final) route:%s url:%s", conf.RouteCode, url)
 	// Set request URL and method
-	if IsDebugMode() {
-		log.Printf("FastPost route: %s sending to url: %s", conf.RouteCode, url)
-	}
+	//if IsDebugMode() {
+	log.Printf("FastPost route: %s sending to url: %s", conf.RouteCode, url)
+	//}
 	req.SetRequestURI(url)
 	req.Header.SetMethod("POST")
 

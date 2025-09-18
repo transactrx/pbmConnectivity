@@ -156,7 +156,7 @@ func (tm *TokenManager) GetIDToken() string {
 // refreshToken performs a client credentials token request and updates the stored token.
 func (tm *TokenManager) refreshToken() error {
 	data := url.Values{}
-	log.Printf("RefreshToken Token type: %v...", tm.config.TokenGrantType)
+	log.Printf("RefreshToken Token type: %v scope: %s", tm.config.TokenGrantType, tm.config.TokenScope)
 	switch tm.config.TokenGrantType {
 	case ClientCredentials:
 		data.Set("grant_type", "client_credentials")
@@ -199,17 +199,25 @@ func (tm *TokenManager) refreshToken() error {
 	}
 	tm.token = token
 
-	if IsDebugMode() {
-		DebugToken(tm.token.AccessToken)
-	}
+	//if IsDebugMode() {
+	DebugToken(tm.token.AccessToken)
+	//}
 	log.Printf("RefreshToken done isValid: %t", tm.Valid())
 	return nil
 }
 
-func DebugToken(accessToken string) {
-	parts := strings.Split(accessToken, ".")
-	payload, _ := base64.RawURLEncoding.DecodeString(parts[1])
-	log.Printf("claims: %s", payload) // JSON; confirm "aud"
+func DebugToken(tok string) {
+	parts := strings.Split(tok, ".")
+	if len(parts) < 2 {
+		log.Print("not a JWT")
+		return
+	}
+	b, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		log.Printf("decode error: %v", err)
+		return
+	}
+	log.Printf("claims: %s", b) // JSON
 }
 
 // parseToken parses the OAuth2 token from the raw response body.
