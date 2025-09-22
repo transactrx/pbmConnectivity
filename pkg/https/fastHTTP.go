@@ -6,18 +6,34 @@ import (
 	"fmt"
 	"github.com/valyala/fasthttp"
 	"log"
+	"net"
 	"strings"
 	"time"
 )
 
 var CustomHttpClient *fasthttp.Client
 
+// CreateGlobalHttpContext initializes a fasthttp.Client with
+// a short TCP connect timeout, while leaving the overall request
+// timeout to be controlled by DoTimeout in FastPost.
 func CreateGlobalHttpContext() {
-	CustomHttpClient = &fasthttp.Client{
-		TLSConfig: &tls.Config{InsecureSkipVerify: Cfg.PbmInsecureSkipVerify}, // Accept invalid certs
-		//MaxConnsPerHost: 100,  // Adjust based on expected traffic
+	connectTimeout := 5 * time.Second
+	dialer := &net.Dialer{
+		Timeout:   connectTimeout,
+		KeepAlive: 30 * time.Second,
 	}
 
+	CustomHttpClient = &fasthttp.Client{
+		TLSConfig: &tls.Config{
+			InsecureSkipVerify: Cfg.PbmInsecureSkipVerify,
+		},
+		Dial: func(addr string) (net.Conn, error) {
+			return dialer.Dial("tcp", addr) // used for both HTTP and HTTPS
+		},
+
+		ReadTimeout:  0, // let DoTimeout handle the total request cap
+		WriteTimeout: 0,
+	}
 }
 
 func FastPost(body []byte, conf RouteInfo, url string) (string, int, error) {
@@ -38,31 +54,31 @@ func FastPost(body []byte, conf RouteInfo, url string) (string, int, error) {
 		req.SetTimeout(timeout)
 	}
 	//if IsDebugMode() {
-	log.Printf("FastPost route: %s sending to url: %s timeout: %s", conf.RouteCode, url, timeout)
+	log.Printf("fastpost route: %s sending to url: %s timeout: %s", conf.RouteCode, url, timeout)
 	//}
 
 	var err error
 	for _, header := range conf.Headers {
 		readyHeader := header.Value
 		if IsDebugMode() {
-			log.Printf("Fastpost header  %s: %s prefix: '%s' Base64encode: %t", header.Key, readyHeader, header.Prefix, header.Base64encode)
+			log.Printf("fastpost header  %s: %s prefix: '%s' Base64encode: %t", header.Key, readyHeader, header.Prefix, header.Base64encode)
 		}
 		if header.Base64encode {
 			readyHeader, err = encodeAuthorization(header.Value, header.Prefix)
 			if err != nil {
-				return fmt.Sprintf("Fastpost failed encoding api key for route code: %s", conf.RouteCode), 401, err
+				return fmt.Sprintf("fastpost failed encoding api key for route code: %s", conf.RouteCode), 401, err
 			}
 		} else if len(header.Prefix) > 0 {
 			readyHeader = header.Prefix + " " + readyHeader
 		}
 		if IsDebugMode() {
-			log.Printf("Fastpost header  readyHeader: %s", readyHeader)
+			log.Printf("fastpost header  readyHeader: %s", readyHeader)
 		}
 		req.Header.Set(header.Key, readyHeader)
 	}
 
 	if len(req.Header.ContentType()) == 0 {
-		log.Printf("Fastpost route code %s defaulting the content type to application/EDI-NCPDP as it was not provided", conf.RouteCode)
+		log.Printf("fastpost route code %s defaulting the content type to application/EDI-NCPDP as it was not provided", conf.RouteCode)
 		req.Header.SetContentType("application/EDI-NCPDP")
 	}
 	req.SetBody(body)
@@ -71,7 +87,7 @@ func FastPost(body []byte, conf RouteInfo, url string) (string, int, error) {
 	if err != nil {
 		log.Printf("fastpost http.write failed route %s: timeout: %s sec sending request error: %v", conf.RouteCode, timeout, err)
 		// Don't touch resp when err != nil
-		return "Fastpost failed sending request", 0, err
+		return "fastpost failed sending request", 0, err
 	}
 	statusCode := resp.StatusCode()
 	log.Printf("fastpost http.read success route %s http response code: %d", conf.RouteCode, statusCode)
