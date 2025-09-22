@@ -1,7 +1,13 @@
 package https
 
 import (
+	"context"
+	"errors"
 	"github.com/transactrx/ncpdpDestination/pkg/pbmlib"
+	"github.com/valyala/fasthttp"
+	"net"
+	"os"
+	"syscall"
 	//"log"
 	//"time"
 )
@@ -11,6 +17,41 @@ func PrintStats(p *HTTPPBMConnect) {
 		//log.Printf("%s", p.stats.WriteStats())
 		//time.Sleep(5 * time.Minute)
 	}
+}
+
+func isTimeout(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// 1) Common sentinels
+	if errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, os.ErrDeadlineExceeded) ||
+		errors.Is(err, fasthttp.ErrTimeout) ||
+		errors.Is(err, syscall.ETIMEDOUT) {
+		return true
+	}
+
+	// 2) Anything implementing net.Error with Timeout()==true
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		return true
+	}
+
+	// 3) net.OpError often wraps dial/read/write timeouts
+	var op *net.OpError
+	if errors.As(err, &op) {
+		// op.Timeout() checks underlying error too
+		if op.Timeout() {
+			return true
+		}
+		// belt & suspenders: direct syscall check on the wrapped error
+		if errors.Is(op.Err, syscall.ETIMEDOUT) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // MapHTTPStatusToTRXCode maps an HTTP status code to a TRX code and returns the corresponding ErrorInfo and a boolean

@@ -74,8 +74,14 @@ func (hpc HTTPPBMConnect) Post(claim []byte, headers map[string][]string) ([]byt
 
 	resp, httpCode, err := FastPost(claim, hpc.Conf, url)
 	if err != nil {
+		// If FastPost couldn't get a response (httpCode == 0),
+		// check specifically for timeout and map it differently.
+		if httpCode == 0 && isTimeout(err) {
+			// map to your timeout TRX (adjust name as needed)
+			return []byte("timeout contacting upstream"), nil, pbmlib.ErrorCode.TRX05
+		}
 		// Should not return 200 for errors.
-		if httpCode == 200 {
+		if httpCode == 0 || httpCode == 200 {
 			httpCode = 500
 		}
 		errorInfo, _ := MapHTTPStatusToTRXCode(httpCode)
