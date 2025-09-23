@@ -111,7 +111,7 @@ func NewSessionContext(appCfg Config) (*SessionContext, error) {
 	ctx := &SessionContext{
 		sessions: make([]*SocketSession, appCfg.PbmOutboundChnls),
 		bitmap:   make([]bool, appCfg.PbmOutboundChnls),
-		sites: make([]*Site, len(appCfg.PbmUrl)*len(Cfg.PbmPorts)),
+		sites:    make([]*Site, len(appCfg.PbmUrl)*len(Cfg.PbmPorts)),
 	}
 
 	// Initialize sites based on parsed URLs
