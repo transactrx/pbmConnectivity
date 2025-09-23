@@ -41,7 +41,6 @@ type TlsSession struct {
 	name      string
 	address   string
 	tlsConn   *tls.Conn
-	readCh    chan []byte
 	readCh1   chan Response
 	writeCh   chan []byte
 	closeCh   chan bool
@@ -139,7 +138,6 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 		session := &TlsSession{
 			name:      createSessionName(i, site.URL),
 			address:   addr,
-			readCh:    make(chan []byte),
 			readCh1:   make(chan Response, MAX_MESSAGES_CHNL),
 			writeCh:   make(chan []byte),
 			closeCh:   make(chan bool),
@@ -245,7 +243,6 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 						// Create a new slice with the received data
 						dataToSend := make([]byte, outputLen)
 						copy(dataToSend, tmpBuffer[:outputLen])
-						//s.readCh <- dataToSend // Send the new slice
 						s.readCh1 <- Response{dataToSend, nil, state}
 						tranFoundState = NoData
 						outputLen = 0
@@ -280,11 +277,6 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 		select {
 		case data := <-s.writeCh:
 			if s.IsConnected() && s.tlsConn != nil {
-				// Flush any already-parsed stale responses
-				drained := drainResponses(s.readCh1, MAX_MESSAGES_CHNL) // same cap as creation
-				if drained > 0 {
-					log.Printf("%s drained %d stale responses before write", s.name, drained)
-				}
 				bytes, err := s.tlsConn.Write(data)
 				if err != nil {
 					log.Printf("%s Write failed: %s", s.name, err)
@@ -335,6 +327,8 @@ func (s Status) String() string {
 }
 
 func drainResponses(ch <-chan Response, max int) (n int) {
+
+	//	log.Printf("drainresponses len of chnl %d cap: %d", len(ch), cap(ch))
 	for n = 0; n < max; n++ {
 		select {
 		case r := <-ch:
@@ -562,7 +556,11 @@ func IsValidResponse(response []byte, requestHeader string) bool {
 // Write sends data through a connection.
 func (s *TlsSession) Write(index int, data []byte) error {
 	log.Printf("%s Snding %d bytes", s.name, len(data))
-	//session := s
+	// Flush any already-parsed stale responses
+	drained := drainResponses(s.readCh1, MAX_MESSAGES_CHNL) // same cap as creation
+	if drained > 0 {
+		log.Printf("%s drained %d stale responses before write", s.name, drained)
+	}
 	s.writeCh <- data
 	return nil
 }
