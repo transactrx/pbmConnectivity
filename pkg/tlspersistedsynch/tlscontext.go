@@ -28,6 +28,8 @@ type Site struct {
 	ActiveChnlCount int
 }
 
+const MAX_MESSAGES_CHNL = 8
+
 type Response struct {
 	data   []byte
 	err    error
@@ -138,7 +140,7 @@ func NewTlsContext(appCfg Config) (*TlsContext, error) {
 			name:      createSessionName(i, site.URL),
 			address:   addr,
 			readCh:    make(chan []byte),
-			readCh1:   make(chan Response),
+			readCh1:   make(chan Response, MAX_MESSAGES_CHNL),
 			writeCh:   make(chan []byte),
 			closeCh:   make(chan bool),
 			connected: false,
@@ -278,6 +280,11 @@ func (s *TlsSession) handleConnection(ctx *TlsContext) {
 		select {
 		case data := <-s.writeCh:
 			if s.IsConnected() && s.tlsConn != nil {
+				// Flush any already-parsed stale responses
+				drained := drainResponses(s.readCh1, MAX_MESSAGES_CHNL) // same cap as creation
+				if drained > 0 {
+					log.Printf("%s drained %d stale responses before write", s.name, drained)
+				}
 				bytes, err := s.tlsConn.Write(data)
 				if err != nil {
 					log.Printf("%s Write failed: %s", s.name, err)
@@ -325,6 +332,19 @@ func (s Status) String() string {
 	default:
 		return "Unknown"
 	}
+}
+
+func drainResponses(ch <-chan Response, max int) (n int) {
+	for n = 0; n < max; n++ {
+		select {
+		case r := <-ch:
+			// Optional: log / metrics on stale
+			_ = r
+		default:
+			return n
+		}
+	}
+	return n
 }
 
 func FindFullTransactionUseASCIILen(input []byte, inputLen int, output *[]byte, outputLen *int, state Status, expectedMsgLen *int) (bool, Status, error) {
@@ -499,42 +519,26 @@ func (s *TlsSession) Read(appCtx context.Context, index int, requestHeader strin
 			if IsValidResponse(response.data, requestHeader) {
 				return response.data, nil
 			}
-			// Stale response, ignore it and keep waiting til good one or timeout
+			// Still could see stale/mismatched after the write; ignore and keep waiting
 			log.Printf("%s read discarded stale/mismatched response", s.name)
+			continue
 		case <-appCtx.Done():
 			return nil, appCtx.Err()
 		}
 	}
 }
 
-/*func (s *TlsSession) Read(appCtx context.Context, index int, requestHeader string) ([]byte, error) {
-
-	select {
-	case response := <-s.readCh1:
-		log.Printf("%s %d bytes received status: %s err: %v", s.name, len(response.data), response.status, response.err)
-		if response.status != ParseError {
-			validResponse := IsValidResponse(response.data, requestHeader)
-			if !validResponse {
-				return nil, errors.New("Mismatch request/response")
-			} else {
-				return response.data, nil
-			}
-		} else {
-			return nil, errors.New("Parse error")
-		}
-
-	case <-appCtx.Done():
-		//ctx.IncrementError(index)
-		return nil, appCtx.Err() // Return the context error, typically context.DeadlineExceeded
-	}
-}
-*/
 // MRG 9/23/24 compare response header vs request header
 // true - valid response
 // false -- issue with incoming header (potential swapped responses)
 func IsValidResponse(response []byte, requestHeader string) bool {
 
 	//log.Printf("PBM response data(ALL) '%s'", string(response))
+	if Cfg.HeaderCheckLen <= 0 {
+		log.Printf("isvalidresponse validation is OFF")
+		return true
+	}
+
 	result := false
 
 	if len(response) > Cfg.HeaderCheckOffset+Cfg.HeaderCheckLen {
