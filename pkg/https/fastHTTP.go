@@ -36,14 +36,12 @@ func CreateGlobalHttpContext() {
 	}
 }
 
-func FastPost(body []byte, conf RouteInfo, url string) (string, int, error) {
+func FastPost(body []byte, conf RouteInfo, url string, _tid string) (string, int, error) {
 	// Initialize fasthttp.Request and fasthttp.Response
 	req := fasthttp.AcquireRequest()
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseRequest(req)
 	defer fasthttp.ReleaseResponse(resp)
-	//log.Printf("FastPost (final) route:%s url:%s", conf.RouteCode, url)
-	// Set request URL and method
 
 	req.SetRequestURI(url)
 	req.Header.SetMethod("POST")
@@ -54,7 +52,7 @@ func FastPost(body []byte, conf RouteInfo, url string) (string, int, error) {
 		req.SetTimeout(timeout)
 	}
 	//if IsDebugMode() {
-	log.Printf("fastpost route: %s sending to url: %s timeout: %s", conf.RouteCode, url, timeout)
+	log.Printf("fastpost tid: %s route: %s sending to url: %s timeout: %s", _tid, conf.RouteCode, url, timeout)
 	//}
 
 	var err error
@@ -85,12 +83,12 @@ func FastPost(body []byte, conf RouteInfo, url string) (string, int, error) {
 	// Perform the request
 	err = CustomHttpClient.DoTimeout(req, resp, timeout)
 	if err != nil {
-		log.Printf("fastpost http.write failed route %s: timeout: %s sec sending request error: %v", conf.RouteCode, timeout, err)
+		log.Printf("fastpost http.write failed tid: %s route %s: timeout: %s sec error: %v", _tid, conf.RouteCode, timeout, err)
 		// Don't touch resp when err != nil
 		return "fastpost failed sending request", 0, err
 	}
 	statusCode := resp.StatusCode()
-	log.Printf("fastpost http.read success route %s http response code: %d", conf.RouteCode, statusCode)
+	log.Printf("fastpost http.read success tid: %s route %s http response code: %d", _tid, conf.RouteCode, statusCode)
 	return string(resp.Body()), statusCode, nil
 }
 
