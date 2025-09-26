@@ -16,7 +16,7 @@ func IsDebugMode() bool {
 func (hpc HTTPPBMConnect) Post(claim []byte, headers map[string][]string) ([]byte, map[string][]string, pbmlib.ErrorInfo) {
 
 	//log.Printf("Post %v", headers)
-	_transmissionId := ""
+	_transmissionId := "NA"
 	_appendTidToUrl := false
 	// Inject bearer token if not already present
 	if hpc.TokenMgr != nil && hpc.TokenMgr.IsValidTokenSettings() {
@@ -72,7 +72,7 @@ func (hpc HTTPPBMConnect) Post(claim []byte, headers map[string][]string) ([]byt
 		log.Printf("post dump - headers: %#v  request: %v", hpc.Conf.Headers, string(claim))
 	}
 
-	resp, httpCode, err := FastPost(claim, hpc.Conf, url)
+	resp, httpCode, err := FastPost(claim, hpc.Conf, url, _transmissionId)
 	if err != nil {
 		// If FastPost couldn't get a response (httpCode == 0),
 		// check specifically for timeout and map it differently.
