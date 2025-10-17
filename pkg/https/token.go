@@ -35,7 +35,7 @@ type TokenManager struct {
 	expiryDelta time.Duration // optional; if zero, fall back to default
 	mu          sync.RWMutex
 	tokenExpiry time.Time
-	name        string
+	host        string
 }
 
 type TokenConfig struct {
@@ -57,16 +57,19 @@ func (tm *TokenManager) IsValidTokenSettings() bool {
 	return false
 }
 
-func (tm *TokenManager) PrintStats(action string, errorCode int, errorDesc string, httpCode int) {
+func (tm *TokenManager) PrintStats(action string, errorCode int, errorDesc string, httpCode int, isValid bool, jti string) {
 	// Construct the stats string
 	errcode := strconv.FormatInt(int64(errorCode), 10)
 	httpcode := strconv.FormatInt(int64(httpCode), 10)
+	isvalid := strconv.FormatBool(isValid)
 
-	stats := "tokenstats name: " + tm.name +
+	stats := "tokenstats host: " + tm.host +
 		" action: " + action +
 		" errcode: " + errcode +
 		" errdesc: " + errorDesc +
-		" httpcode: " + httpcode
+		" httpcode: " + httpcode +
+		" isvalid: " + isvalid +
+		" jti: " + jti
 
 	log.Printf("%s", stats)
 }
@@ -105,54 +108,27 @@ func (tm *TokenManager) Expired() bool {
 
 func (tm *TokenManager) AutoRefreshToken() {
 	for {
-		tm.mu.RLock()
 		tokenNil := tm.token == nil
 		refreshAt := tm.tokenExpiry.Add(-refreshDelta) // e.g., 60–120s early
-		tm.mu.RUnlock()
-
 		if tokenNil {
-			log.Printf("AutoRefreshToken - waiting 10 seconds...")
-			time.Sleep(10 * time.Second)
 			_ = tm.refreshToken()
+			log.Printf("autorefreshtoken - waiting 10 seconds...")
+			time.Sleep(10 * time.Second)
 			continue
 		}
 		sleep := time.Until(refreshAt)
 		if sleep > 0 {
+			log.Printf("autorefreshtoken sleeping til next cycle %f seconds", sleep.Seconds())
 			time.Sleep(sleep)
 		}
 		if err := tm.refreshToken(); err != nil {
-			log.Printf("AutoRefreshToken refresh failed: %v; retrying in 10 seconds", err)
+			log.Printf("autorefreshtoken refresh failed: %v; retrying in 10 seconds", err)
 			time.Sleep(10 * time.Second)
 			//backoffSleep() // exp backoff + jitter; DO NOT touch tm.token/tm.tokenExpiry here
 		}
 	}
 }
 
-/*func (tm *TokenManager) AutoRefreshToken() {
-	var err error
-	for {
-		if tm.token != nil {
-			expiresIn := time.Duration(tm.token.ExpiresIn) * time.Second
-			expiry := timeNow().Add(expiresIn)
-
-			refreshAfter := time.Until(expiry.Add(-refreshDelta))
-			log.Printf("AutoRefreshToken refreshAfter: %s, expiry: %v", refreshAfter, expiry)
-
-			if refreshAfter > 0 {
-				time.Sleep(refreshAfter)
-			}
-			err = tm.refreshToken()
-			if err != nil {
-				log.Printf("AutoRefreshToken Token refresh failed: %v waiting 10 seconds before retrying", err)
-				time.Sleep(10 * time.Second)
-			}
-		} else {
-			log.Printf("AutoRefreshToken - waiting 10 seconds...")
-			time.Sleep(10 * time.Second)
-		}
-	}
-}
-*/
 // GetToken returns a valid access token or an empty string if unavailable.
 func (tm *TokenManager) GetToken() (string, error) {
 	tm.mu.RLock()
@@ -198,8 +174,7 @@ func (tm *TokenManager) GetIDToken() string {
 // refreshToken performs a client credentials token request and updates the stored token.
 func (tm *TokenManager) refreshToken() error {
 	data := url.Values{}
-	//log.Printf("token request token type: %v scope: %s", tm.config.TokenGrantType, tm.config.TokenScope)
-	log.Printf("token-request token type: %v scope: %s", tm.config.TokenGrantType, tm.config.TokenScope)
+	tm.PrintStats("request", 0, "na", 0, tm.Valid(), "na")
 	switch tm.config.TokenGrantType {
 	case ClientCredentials:
 		data.Set("grant_type", "client_credentials")
@@ -216,6 +191,7 @@ func (tm *TokenManager) refreshToken() error {
 
 	req, err := http.NewRequest(http.MethodPost, tm.config.TokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
+		tm.PrintStats("response", -1, fmt.Sprintf("%v", err), -1, tm.Valid(), "na")
 		return err
 	}
 
@@ -223,51 +199,74 @@ func (tm *TokenManager) refreshToken() error {
 	req.Header.Set("Authorization", "Basic "+basicAuth(tm.config.ClientID, tm.config.ClientSecret))
 	res, err := tm.httpClient.Do(req)
 	if err != nil {
+		tm.PrintStats("response", -1, fmt.Sprintf("%v", err), -1, tm.Valid(), "na")
 		return err
 	}
 	defer res.Body.Close()
-	err = tm.processResponse(res)
-	if err != nil {
-		return err
+	err1, httpCode := tm.processResponse(res)
+	if err1 != nil {
+		tm.PrintStats("response", httpCode, fmt.Sprintf("%v", err), httpCode, tm.Valid(), "na")
+		return err1
 	}
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
+		tm.PrintStats("response", -1, fmt.Sprintf("%v", err), -1, tm.Valid(), "na")
 		return err
 	}
 	//log.Printf("RefreshToken: raw response: %s", body)
 	token, err := parseToken(body)
 	if err != nil {
+		tm.PrintStats("response", -1, fmt.Sprintf("%v", err), -1, tm.Valid(), "na")
 		return err
 	}
 	tm.setToken(token)
-	//tm.token = token
 	//if IsDebugMode() {
-	DebugToken(tm.token.AccessToken)
+	jti := DebugToken(tm.token.AccessToken)
 	//}
-	log.Printf("RefreshToken done isValid: %t", tm.Valid())
+	tm.PrintStats("response", 0, "success", 0, tm.Valid(), jti)
 	return nil
 }
 
 func (tm *TokenManager) setToken(t *oauth2.Token) {
-	tm.mu.Lock()
+	//tm.mu.Lock()
 	tm.token = t
 	tm.tokenExpiry = time.Now().Add(time.Second * time.Duration(t.ExpiresIn))
-	tm.mu.Unlock()
+	//tm.mu.Unlock()
 }
 
-func DebugToken(tok string) {
+func DebugToken(tok string) string {
 	parts := strings.Split(tok, ".")
 	if len(parts) < 2 {
 		log.Print("not a JWT")
-		return
+		return ""
 	}
+
+	// Decode payload (2nd part)
 	b, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
 		log.Printf("decode error: %v", err)
-		return
+		return ""
 	}
-	log.Printf("claims: %s", b) // JSON
+
+	// Log claims JSON for reference
+	//log.Printf("claims: %s", b)
+
+	// Parse claims as JSON
+	var claims map[string]interface{}
+	if err := json.Unmarshal(b, &claims); err != nil {
+		log.Printf("unmarshal error: %v", err)
+		return ""
+	}
+
+	// Extract jti if present
+	if jti, ok := claims["jti"].(string); ok {
+		//log.Printf("jti: %s", jti)
+		return jti
+	}
+
+	log.Print("no jti claim found")
+	return ""
 }
 
 // parseToken parses the OAuth2 token from the raw response body.
@@ -287,10 +286,10 @@ func basicAuth(username, password string) string {
 }
 
 // processResponse logs HTTP status info.
-func (tm *TokenManager) processResponse(res *http.Response) error {
+func (tm *TokenManager) processResponse(res *http.Response) (error, int) {
 	if res.StatusCode != http.StatusOK {
 		log.Printf("processResponse: token request failed with status %s", res.Status)
-		return fmt.Errorf("token request failed: %s", res.Status)
+		return fmt.Errorf("token request failed: %s", res.Status), res.StatusCode
 	}
-	return nil
+	return nil, res.StatusCode
 }
