@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +34,8 @@ type TokenManager struct {
 	token       *oauth2.Token
 	expiryDelta time.Duration // optional; if zero, fall back to default
 	mu          sync.RWMutex
+	tokenExpiry time.Time
+	name        string
 }
 
 type TokenConfig struct {
@@ -52,6 +55,20 @@ func (tm *TokenManager) IsValidTokenSettings() bool {
 		return true
 	}
 	return false
+}
+
+func (tm *TokenManager) PrintStats(action string, errorCode int, errorDesc string, httpCode int) {
+	// Construct the stats string
+	errcode := strconv.FormatInt(int64(errorCode), 10)
+	httpcode := strconv.FormatInt(int64(httpCode), 10)
+
+	stats := "tokenstats name: " + tm.name +
+		" action: " + action +
+		" errcode: " + errcode +
+		" errdesc: " + errorDesc +
+		" httpcode: " + httpcode
+
+	log.Printf("%s", stats)
 }
 
 func NewTokenManagerWithConfig(cfg TokenConfig) *TokenManager {
@@ -87,6 +104,31 @@ func (tm *TokenManager) Expired() bool {
 }
 
 func (tm *TokenManager) AutoRefreshToken() {
+	for {
+		tm.mu.RLock()
+		tokenNil := tm.token == nil
+		refreshAt := tm.tokenExpiry.Add(-refreshDelta) // e.g., 60–120s early
+		tm.mu.RUnlock()
+
+		if tokenNil {
+			log.Printf("AutoRefreshToken - waiting 10 seconds...")
+			time.Sleep(10 * time.Second)
+			_ = tm.refreshToken()
+			continue
+		}
+		sleep := time.Until(refreshAt)
+		if sleep > 0 {
+			time.Sleep(sleep)
+		}
+		if err := tm.refreshToken(); err != nil {
+			log.Printf("AutoRefreshToken refresh failed: %v; retrying in 10 seconds", err)
+			time.Sleep(10 * time.Second)
+			//backoffSleep() // exp backoff + jitter; DO NOT touch tm.token/tm.tokenExpiry here
+		}
+	}
+}
+
+/*func (tm *TokenManager) AutoRefreshToken() {
 	var err error
 	for {
 		if tm.token != nil {
@@ -110,7 +152,7 @@ func (tm *TokenManager) AutoRefreshToken() {
 		}
 	}
 }
-
+*/
 // GetToken returns a valid access token or an empty string if unavailable.
 func (tm *TokenManager) GetToken() (string, error) {
 	tm.mu.RLock()
@@ -156,7 +198,8 @@ func (tm *TokenManager) GetIDToken() string {
 // refreshToken performs a client credentials token request and updates the stored token.
 func (tm *TokenManager) refreshToken() error {
 	data := url.Values{}
-	log.Printf("RefreshToken Token type: %v scope: %s", tm.config.TokenGrantType, tm.config.TokenScope)
+	//log.Printf("token request token type: %v scope: %s", tm.config.TokenGrantType, tm.config.TokenScope)
+	log.Printf("token-request token type: %v scope: %s", tm.config.TokenGrantType, tm.config.TokenScope)
 	switch tm.config.TokenGrantType {
 	case ClientCredentials:
 		data.Set("grant_type", "client_credentials")
@@ -197,13 +240,20 @@ func (tm *TokenManager) refreshToken() error {
 	if err != nil {
 		return err
 	}
-	tm.token = token
-
+	tm.setToken(token)
+	//tm.token = token
 	//if IsDebugMode() {
 	DebugToken(tm.token.AccessToken)
 	//}
 	log.Printf("RefreshToken done isValid: %t", tm.Valid())
 	return nil
+}
+
+func (tm *TokenManager) setToken(t *oauth2.Token) {
+	tm.mu.Lock()
+	tm.token = t
+	tm.tokenExpiry = time.Now().Add(time.Second * time.Duration(t.ExpiresIn))
+	tm.mu.Unlock()
 }
 
 func DebugToken(tok string) {
