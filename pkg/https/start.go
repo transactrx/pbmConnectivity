@@ -68,6 +68,7 @@ func (pc *HTTPPBMConnect) Start(cfgMap map[string]interface{}) error {
 	pc.TokenMgr = TokenMgr
 	hostName, _ := os.Hostname()
 	TokenMgr.host = hostName
+
 	if pc.TokenMgr.IsValidTokenSettings() {
 		//go GenerateTokens(pc.TokenMgr)
 		go TokenMgr.AutoRefreshToken()
