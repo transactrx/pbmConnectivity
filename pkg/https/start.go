@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/transactrx/pbmConnectivity/pkg/helpers"
 	"log"
+	"os"
 	"time"
 )
 
@@ -65,8 +66,11 @@ func (pc *HTTPPBMConnect) Start(cfgMap map[string]interface{}) error {
 	TokenCfg.HTTPTimeout = 5 * time.Second
 	TokenMgr := NewTokenManagerWithConfig(TokenCfg)
 	pc.TokenMgr = TokenMgr
+	hostName, _ := os.Hostname()
+	TokenMgr.host = hostName
+
 	if pc.TokenMgr.IsValidTokenSettings() {
-		go GenerateTokens(pc.TokenMgr)
+		//go GenerateTokens(pc.TokenMgr)
 		go TokenMgr.AutoRefreshToken()
 	}
 	CreateGlobalHttpContext()
