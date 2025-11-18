@@ -504,7 +504,7 @@ func (s *SocketSession) ProcessResponseWorker() {
 					// Load and delete the transaction ID from responsePbmHeader
 					tid, ok := responsePbmHeader.LoadAndDelete(responseHeader)
 					if !ok {
-						log.Printf("%s Transaction ID not found for request header: %s", s.name, responseHeader)
+						log.Printf("%s Transaction ID not found for request header: '%s'", s.name, responseHeader)
 						continue
 					}
 					tidStr, ok := tid.(string)

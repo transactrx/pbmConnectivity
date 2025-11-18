@@ -544,15 +544,15 @@ func (s *TlsSession) IsConnected() bool {
 func (s *TlsSession) ProcessResponseWorker() {
 
 	for {
-
 		select {
 		case response := <-s.readCh1:
 			log.Printf("%s %d bytes received status: %s err: %v", s.name, len(response.data), response.status, response.err)
 			if response.status != ParseError {
 				responseHeader := GetHeader(response.data, s.appConfig)
 				if len(responseHeader) > 0 {
+								
 					// Load and delete the transaction ID from responsePbmHeader
-					tid, ok := responsePbmHeader.LoadAndDelete(responseHeader)
+					/*tid, ok := responsePbmHeader.LoadAndDelete(responseHeader)
 					if !ok {
 						log.Printf("%s Transaction ID not found for request header: %s", s.name, responseHeader)
 						continue
@@ -574,12 +574,19 @@ func (s *TlsSession) ProcessResponseWorker() {
 					if !ok {
 						log.Printf("%s Invalid response channel type", s.name)
 						continue
+					}*/
+
+					foundResponse, ok := FindResponseByHeader(responseHeader)
+					if !ok {
+						log.Printf("%s Transaction not found for request header: %s", s.name, responseHeader)
+						continue
 					}
+					responseMap.Delete(foundResponse.Tid)
 
 					// Send response safely (avoid deadlock)
 					select {
-					case chTyped <- response:
-						log.Printf("%s response sent to waiting goroutine for tid: %s", s.name, tidStr)
+					case foundResponse.ResponseChnl <- response:
+						log.Printf("%s response sent to waiting goroutine for tid: %s", s.name, foundResponse.Tid)
 					default:
 						log.Printf("%s No receiver available, dropping response", s.name)
 					}
@@ -591,6 +598,28 @@ func (s *TlsSession) ProcessResponseWorker() {
 
 	}
 
+}
+
+func FindResponseByHeader(responseHeader string) (*ResponseEntry, bool) {
+    //var foundTid string
+    var foundEntry *ResponseEntry
+
+    responseMap.Range(func(key, value any) bool {
+        entry := value.(*ResponseEntry)
+        if entry.RequestHeader == responseHeader {
+            //foundTid = entry.Tid
+            foundEntry = entry
+            return false // stop iteration
+        }
+        return true
+    })
+
+    if foundEntry != nil {
+        //responseMap.Delete(foundTid)
+        return foundEntry, true
+    }
+
+    return nil, false
 }
 
 func GetHeader(response []byte, appCfg Config) string {
