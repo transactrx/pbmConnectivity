@@ -8,8 +8,15 @@ import (
 	"time"
 )
 
-var responseChans sync.Map     // tid vs responsechnl
-var responsePbmHeader sync.Map // headertoPBM vs tid
+// var responseChans sync.Map     // tid vs responsechnl
+// var responsePbmHeader sync.Map // headertoPBM vs tid
+
+type ResponseEntry struct {
+	ResponseChnl   chan Response
+	Tid            string
+	RequestHeader  string
+}
+var responseMap sync.Map
 
 type Claim struct {
 	Tid    string
@@ -38,10 +45,18 @@ func (pc *AsynchFlow) Post(claim []byte, header map[string][]string) ([]byte, ma
 	}
 	log.Printf("asynch.post[%d]  tid: %s", index, tid)
 	respCh := make(chan Response, 1) // Buffered to avoid goroutine leaks
-	responseChans.Store(tid, respCh)
-	defer responseChans.Delete(tid)
-	responsePbmHeader.Store(requestHeader, tid)
-	defer responsePbmHeader.Delete(requestHeader)
+
+	// responseChans.Store(tid, respCh)
+	// defer responseChans.Delete(tid)
+	// responsePbmHeader.Store(requestHeader, tid)
+	// defer responsePbmHeader.Delete(requestHeader)
+	response := &ResponseEntry{
+		Tid:           tid,
+		RequestHeader: requestHeader,
+		ResponseChnl:  respCh,
+	}
+	responseMap.Store(tid, response)
+	defer responseMap.Delete(tid)
 
 	err = session.Write(index, claim)
 	if err != nil {
