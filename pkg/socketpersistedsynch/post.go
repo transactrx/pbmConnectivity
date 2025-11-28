@@ -28,7 +28,7 @@ func (pc *SocketPersistedSyncConnect) Post(claim []byte, header map[string][]str
 	session , index, err := Ctx.FindConnection()
 	if err != nil {
 		log.Printf("socketpersynch.post tid: %s no channel found", tid)
-		return nil, nil, pbmlib.ErrorCode.TRX10
+		return nil, nil, pbmlib.ErrorCode.TRX14
 	}
 	log.Printf("socketpersynch.post[%d]  tid: %s",index,tid)
 	err = session.Write(index, claim)
