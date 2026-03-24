@@ -41,7 +41,7 @@ func (pc *AsynchFlow) Post(claim []byte, header map[string][]string) ([]byte, ma
 
 	if err != nil || index == -1 {
 		log.Printf("asynch.post tid: %s no channel found", tid)
-		return nil, nil, pbmlib.ErrorCode.TRX08
+		return nil, nil, pbmlib.ErrorCode.TRX14
 	}
 	log.Printf("asynch.post[%d]  tid: %s", index, tid)
 	respCh := make(chan Response, 1) // Buffered to avoid goroutine leaks

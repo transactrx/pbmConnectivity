@@ -32,7 +32,7 @@ func (pc *SocketAsyncConnect) Post(claim []byte, header map[string][]string) ([]
 	session, index, err := pc.Ctx.FindLeastBusyChnl()
 	if err != nil {
 		log.Printf("socketasynch.post tid: %s no channel found", tid)
-		return nil, nil, pbmlib.ErrorCode.TRX10
+		return nil, nil, pbmlib.ErrorCode.TRX14
 	}
 	log.Printf("socketasynch.post[%d]  tid: %s", index, tid)
 
