@@ -54,6 +54,25 @@ func isTimeout(err error) bool {
 	return false
 }
 
+// LooksLikeNCPDP checks if the response body appears to be a valid NCPDP response.
+// Valid NCPDP responses start with "D0" and contain field separators (0x1C).
+func LooksLikeNCPDP(body []byte) bool {
+	if len(body) < 10 {
+		return false
+	}
+	// Check for version/release "D0" at start
+	if string(body[0:2]) != "D0" {
+		return false
+	}
+	// Check for NCPDP field separator (0x1C)
+	for _, b := range body {
+		if b == 0x1C {
+			return true
+		}
+	}
+	return false
+}
+
 // MapHTTPStatusToTRXCode maps an HTTP status code to a TRX code and returns the corresponding ErrorInfo and a boolean
 // indicating if it's considered an error
 func MapHTTPStatusToTRXCode(httpCode int) (pbmlib.ErrorInfo, bool) {
