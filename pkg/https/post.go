@@ -90,11 +90,6 @@ func (hpc HTTPPBMConnect) Post(claim []byte, headers map[string][]string) ([]byt
 
 	errorInfo, _ := MapHTTPStatusToTRXCode(httpCode)
 
-	// For 400 responses, check if body looks like valid NCPDP - if so, treat as success
-	if httpCode == 400 && LooksLikeNCPDP([]byte(resp)) {
-		errorInfo = pbmlib.ErrorCode.TRX00
-	}
-
 	if errorInfo != pbmlib.ErrorCode.TRX00 && Cfg.IsDebugMode {
 		log.Printf("error dump - httpCode: %v   headers: %#v   response: %v", httpCode, headers, resp)
 	}
