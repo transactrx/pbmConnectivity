@@ -3,7 +3,7 @@ module github.com/transactrx/pbmConnectivity
 go 1.25.0
 
 require (
-	github.com/transactrx/ncpdpDestination v0.0.23
+	github.com/transactrx/ncpdpDestination v0.0.24
 	github.com/valyala/fasthttp v1.70.0
 	golang.org/x/oauth2 v0.36.0
 )
