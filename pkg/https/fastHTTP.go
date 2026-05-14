@@ -35,7 +35,6 @@ func CreateGlobalHttpContext() {
 		WriteTimeout:        0,
 	}
 	if Cfg.DisableConnectionPooling {
-		CustomHttpClient.MaxConnsPerHost = 1
 		CustomHttpClient.MaxIdleConnDuration = 1 * time.Nanosecond
 		CustomHttpClient.MaxConnDuration = 1 * time.Nanosecond
 		log.Printf("Connection pooling disabled")
