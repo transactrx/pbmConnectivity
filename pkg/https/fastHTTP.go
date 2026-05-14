@@ -23,14 +23,6 @@ func CreateGlobalHttpContext() {
 		KeepAlive: 30 * time.Second,
 	}
 
-	maxConnsPerHost := 512
-	maxIdleConnDuration := time.Duration(Cfg.MaxIdleConnDuration) * time.Second
-	if Cfg.DisableConnectionPooling {
-		maxConnsPerHost = 0
-		maxIdleConnDuration = 0
-		log.Printf("Connection pooling disabled")
-	}
-
 	CustomHttpClient = &fasthttp.Client{
 		TLSConfig: &tls.Config{
 			InsecureSkipVerify: Cfg.PbmInsecureSkipVerify,
@@ -38,11 +30,15 @@ func CreateGlobalHttpContext() {
 		Dial: func(addr string) (net.Conn, error) {
 			return dialer.Dial("tcp", addr) // used for both HTTP and HTTPS
 		},
-
+	
 		ReadTimeout:         0, // let DoTimeout handle the total request cap
 		WriteTimeout:        0,
-		MaxConnsPerHost:     maxConnsPerHost,
-		MaxIdleConnDuration: maxIdleConnDuration,
+	}
+	if Cfg.DisableConnectionPooling {
+		CustomHttpClient.MaxConnsPerHost = 1
+		CustomHttpClient.MaxIdleConnDuration = 1 * time.Nanosecond
+		CustomHttpClient.MaxConnDuration = 1 * time.Nanosecond
+		log.Printf("Connection pooling disabled")
 	}
 }
 
@@ -55,6 +51,9 @@ func FastPost(body []byte, conf RouteInfo, url string, _tid string) (string, int
 
 	req.SetRequestURI(url)
 	req.Header.SetMethod("POST")
+	if Cfg.DisableConnectionPooling {
+		req.SetConnectionClose()
+	}
 	timeout := time.Duration(conf.Timeout) * time.Second
 
 	// Set timeout if specified
