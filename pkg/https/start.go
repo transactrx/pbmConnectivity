@@ -14,19 +14,21 @@ type HTTPPBMConnect struct {
 }
 
 type Config struct {
-	Routes                []RouteInfo `json:"routes"`
-	DbName                string      `json:"dbName"`
-	DbUserName            string      `json:"dbUserName"`
-	DbPassword            string      `json:"dbPassword"`
-	DbHost                string      `json:"dbHost"`
-	DBPort                string      `json:"dbPort"`
-	DBSslMode             string      `json:"dbSslMode"`
-	IsDebugMode           bool
-	PbmUrl                string
-	PbmPort               string
-	PbmReceiveTimeOut     string
-	PbmInsecureSkipVerify bool
-	TlsSplitHandshake     bool
+	Routes                   []RouteInfo `json:"routes"`
+	DbName                   string      `json:"dbName"`
+	DbUserName               string      `json:"dbUserName"`
+	DbPassword               string      `json:"dbPassword"`
+	DbHost                   string      `json:"dbHost"`
+	DBPort                   string      `json:"dbPort"`
+	DBSslMode                string      `json:"dbSslMode"`
+	IsDebugMode              bool
+	PbmUrl                   string
+	PbmPort                  string
+	PbmReceiveTimeOut        string
+	PbmInsecureSkipVerify    bool
+	TlsSplitHandshake        bool
+	DisableConnectionPooling bool
+	MaxIdleConnDuration      int
 }
 type RouteInfo struct {
 	RouteCode string   `json:"routeCode"`
@@ -57,6 +59,8 @@ func (pc *HTTPPBMConnect) Start(cfgMap map[string]interface{}) error {
 	Cfg.PbmInsecureSkipVerify = helpers.GetBool(cfgMap, "pbmInsecureSkipVerify", false)
 	Cfg.TlsSplitHandshake = helpers.GetBool(cfgMap, "TlsSplitHandshake", true)
 	Cfg.IsDebugMode = helpers.GetBool(cfgMap, "debugEnabled", false)
+	Cfg.DisableConnectionPooling = helpers.GetBool(cfgMap, "disableConnectionPooling", false)
+	Cfg.MaxIdleConnDuration = helpers.GetInt(cfgMap, "maxIdleConnDuration", 10)
 	TokenCfg.ClientID = helpers.GetString(cfgMap, "clientId")
 	TokenCfg.ClientSecret = helpers.GetString(cfgMap, "clientSecret")
 	TokenCfg.TokenURL = helpers.GetString(cfgMap, "tokenUrl")

@@ -23,6 +23,14 @@ func CreateGlobalHttpContext() {
 		KeepAlive: 30 * time.Second,
 	}
 
+	maxConnsPerHost := 512
+	maxIdleConnDuration := time.Duration(Cfg.MaxIdleConnDuration) * time.Second
+	if Cfg.DisableConnectionPooling {
+		maxConnsPerHost = 0
+		maxIdleConnDuration = 0
+		log.Printf("Connection pooling disabled")
+	}
+
 	CustomHttpClient = &fasthttp.Client{
 		TLSConfig: &tls.Config{
 			InsecureSkipVerify: Cfg.PbmInsecureSkipVerify,
@@ -31,8 +39,10 @@ func CreateGlobalHttpContext() {
 			return dialer.Dial("tcp", addr) // used for both HTTP and HTTPS
 		},
 
-		ReadTimeout:  0, // let DoTimeout handle the total request cap
-		WriteTimeout: 0,
+		ReadTimeout:         0, // let DoTimeout handle the total request cap
+		WriteTimeout:        0,
+		MaxConnsPerHost:     maxConnsPerHost,
+		MaxIdleConnDuration: maxIdleConnDuration,
 	}
 }
 
