@@ -271,7 +271,7 @@ func (s *SocketSession) handleConnection(ctx *SessionContext) {
 					copy(tmpBuffer, zeroSlice) // Copy the zeroed slice into the buffer
 				} else {
 					if retVal && state == TransactionFound {
-						s.activeClaims.Add(-1)
+						s.releaseClaim()
 						// Create a new slice with the received data
 						dataToSend := make([]byte, outputLen)
 						copy(dataToSend, tmpBuffer[:outputLen])
@@ -621,6 +621,10 @@ func (ctx *SessionContext) FindLeastBusyChnl() (*SocketSession, int, error) {
 	var bestSession *SocketSession = nil
 	minClaims := int32(1<<31 - 1) // Set to max int32 value
 
+	// lock so concurrent posts don't all pick the same chnl before it is counted
+	ctx.mu.Lock()
+	defer ctx.mu.Unlock()
+
 	for _, s := range ctx.sessions {
 		if s.paused.Load() || !s.connected.Load() {
 			if s.appConfig.DebugEnabled {
@@ -639,9 +643,22 @@ func (ctx *SessionContext) FindLeastBusyChnl() (*SocketSession, int, error) {
 		}
 	}
 	if bestSession != nil {
+		// count the claim on the chosen chnl - decremented when its response is received
+		bestSession.activeClaims.Add(1)
 		return bestSession, bestSession.chnl, nil
 	} else {
 		return nil, -1, errors.New("no sessions available")
+	}
+}
+
+// releaseClaim decrements the outstanding claim count without going below zero
+// (e.g. a late response after the count was reset on a read error)
+func (s *SocketSession) releaseClaim() {
+	for {
+		cur := s.activeClaims.Load()
+		if cur <= 0 || s.activeClaims.CompareAndSwap(cur, cur-1) {
+			return
+		}
 	}
 }
 
