@@ -66,7 +66,7 @@ type SessionContext struct {
 	sessions  []*SocketSession
 	bitmap    []bool
 	mu        sync.Mutex
-	//lastUsed  int
+	lastUsed  int // index of the last chnl picked - ties rotate from here
 	sites     []*Site
 	//tcpDialer *net.Dialer
 }
@@ -251,7 +251,7 @@ func (s *SocketSession) handleConnection(ctx *SessionContext) {
 				copy(readBuffer, zeroSlice) // Copy the zeroed slice into the buffer
 				bytes, err := s.tcpConn.Read(readBuffer)
 				if err != nil || bytes <= 0 {
-					s.activeClaims.Store(0)
+					// activeClaims is not reset here - each in-flight post releases its own claim when it returns
 					// MRG 8.21.24 let the monitor routine disconnect after error count
 					ctx.DisconnectSession(s.chnl)
 					log.Printf("%s Read failed: %s", s.name, err)
@@ -271,7 +271,6 @@ func (s *SocketSession) handleConnection(ctx *SessionContext) {
 					copy(tmpBuffer, zeroSlice) // Copy the zeroed slice into the buffer
 				} else {
 					if retVal && state == TransactionFound {
-						s.releaseClaim()
 						// Create a new slice with the received data
 						dataToSend := make([]byte, outputLen)
 						copy(dataToSend, tmpBuffer[:outputLen])
@@ -619,13 +618,18 @@ func (s *SocketSession) Write(index int, data []byte) error {
 
 func (ctx *SessionContext) FindLeastBusyChnl() (*SocketSession, int, error) {
 	var bestSession *SocketSession = nil
+	bestIndex := -1
 	minClaims := int32(1<<31 - 1) // Set to max int32 value
 
 	// lock so concurrent posts don't all pick the same chnl before it is counted
 	ctx.mu.Lock()
 	defer ctx.mu.Unlock()
 
-	for _, s := range ctx.sessions {
+	// start after the last chnl used so ties rotate instead of always landing on chnl 0
+	n := len(ctx.sessions)
+	for i := 1; i <= n; i++ {
+		index := (ctx.lastUsed + i) % n
+		s := ctx.sessions[index]
 		if s.paused.Load() || !s.connected.Load() {
 			if s.appConfig.DebugEnabled {
 				log.Printf("%s paused or not connected - skipping chnl ", s.name)
@@ -634,25 +638,26 @@ func (ctx *SessionContext) FindLeastBusyChnl() (*SocketSession, int, error) {
 		}
 		outstanding := s.activeClaims.Load()
 		if s.appConfig.DebugEnabled {
-			log.Printf("%s active claims chhl: %d activeClaims: %d ", s.name, s.chnl, &s.activeClaims)
+			log.Printf("%s active claims chnl: %d activeClaims: %d ", s.name, s.chnl, outstanding)
 		}
 
 		if outstanding < minClaims {
 			minClaims = outstanding
 			bestSession = s
+			bestIndex = index
 		}
 	}
 	if bestSession != nil {
-		// count the claim on the chosen chnl - decremented when its response is received
+		// count the claim on the chosen chnl - post releases it when it returns
 		bestSession.activeClaims.Add(1)
+		ctx.lastUsed = bestIndex
 		return bestSession, bestSession.chnl, nil
 	} else {
 		return nil, -1, errors.New("no sessions available")
 	}
 }
 
-// releaseClaim decrements the outstanding claim count without going below zero
-// (e.g. a late response after the count was reset on a read error)
+// releaseClaim decrements the outstanding claim count (called once per post) - never below zero as a safety net
 func (s *SocketSession) releaseClaim() {
 	for {
 		cur := s.activeClaims.Load()
