@@ -34,6 +34,8 @@ func (pc *SocketAsyncConnect) Post(claim []byte, header map[string][]string) ([]
 		log.Printf("socketasynch.post tid: %s no channel found", tid)
 		return nil, nil, pbmlib.ErrorCode.TRX14
 	}
+	// FindLeastBusyChnl counted this claim on the chnl - release it however post ends (response, timeout, write failure)
+	defer session.releaseClaim()
 	log.Printf("socketasynch.post[%d]  tid: %s", index, tid)
 
 	//////////////////////
