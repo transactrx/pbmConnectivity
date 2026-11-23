@@ -33,6 +33,9 @@ type Config struct {
 	// 1 - skipheader - excludes header
 	DisconnectFailedCount        int
 	PauseSiteIfFailureHigherThan int
+	// Recycle each connection (when idle) once it is older than this; 0 = off.
+	// Channels are staggered between 50% and 100% of this value.
+	MaxConnAgeMinutes int
 }
 
 const PBM_DATA_BUFFER = 16384
@@ -60,6 +63,7 @@ func (pc *TLSPersistedSyncConnect) Start(cfgMap map[string]interface{}) error {
 	Cfg.MessageLenType = helpers.ParseMessageLenType(cfgMap)
 	Cfg.DisconnectFailedCount = helpers.GetInt(cfgMap, "DisconnectFailedCount", 10)
 	Cfg.PauseSiteIfFailureHigherThan = helpers.GetInt(cfgMap, "PauseSiteIfFailureHigherThan", 0)
+	Cfg.MaxConnAgeMinutes = helpers.GetInt(cfgMap, "maxConnAgeMinutes", 0)
 
 	PrintStructFieldsAndValues(Cfg)
 

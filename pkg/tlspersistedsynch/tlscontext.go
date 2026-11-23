@@ -51,6 +51,8 @@ type TlsSession struct {
 	chnl      int
 	errors    atomic.Int32
 	site      *Site
+	// connectedAt is when the session last became usable (guarded by mu).
+	connectedAt time.Time
 }
 
 // TlsContext manages multiple TLS sessions.
@@ -190,6 +192,10 @@ func (ctx *TlsContext) DisconnectSession(index int) {
 }
 
 func (ctx *TlsContext) StartMonitoring(threshold int, interval time.Duration) {
+	maxConnAge := time.Duration(Cfg.MaxConnAgeMinutes) * maxConnAgeUnit
+	if maxConnAge > 0 {
+		log.Printf("TlsContext connection recycling enabled: max age %s (staggered per chnl)", maxConnAge)
+	}
 	go func() {
 		for {
 			time.Sleep(interval)
@@ -199,8 +205,57 @@ func (ctx *TlsContext) StartMonitoring(threshold int, interval time.Duration) {
 					ctx.DisconnectSession(i)
 				}
 			}
+			if maxConnAge > 0 {
+				ctx.recycleOldSessions(maxConnAge)
+			}
 		}
 	}()
+}
+
+// maxConnAgeUnit is the unit for MaxConnAgeMinutes (a var so tests can shorten it).
+var maxConnAgeUnit = time.Minute
+
+// recycleLimit staggers channels between 100% (chnl 0) and 50% of maxAge so
+// they don't all reconnect at the same moment.
+func recycleLimit(maxAge time.Duration, chnl, chnlCount int) time.Duration {
+	if chnlCount <= 1 {
+		return maxAge
+	}
+	return maxAge - time.Duration(chnl)*maxAge/time.Duration(2*chnlCount)
+}
+
+// recycleOldSessions closes idle sessions older than their limit; the session's
+// read loop then reconnects them through the normal path. A session that is in
+// use (claimed in the bitmap) is skipped and retried on the next tick.
+func (ctx *TlsContext) recycleOldSessions(maxAge time.Duration) {
+	for i, session := range ctx.sessions {
+		age, connected := session.connectionAge()
+		limit := recycleLimit(maxAge, i, len(ctx.sessions))
+		if !connected || age < limit {
+			continue
+		}
+		ctx.mu.Lock()
+		if ctx.bitmap[i] {
+			ctx.mu.Unlock()
+			continue
+		}
+		ctx.bitmap[i] = true // reserve so FindConnection can't hand it out
+		ctx.mu.Unlock()
+
+		log.Printf("%s recycling connection age: %s limit: %s", session.name, age.Round(time.Second), limit)
+		ctx.DisconnectSession(i)
+		ctx.ReleaseConnection(i)
+	}
+}
+
+// connectionAge returns how long the session has been connected.
+func (s *TlsSession) connectionAge() (time.Duration, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.connected || s.connectedAt.IsZero() {
+		return 0, false
+	}
+	return time.Since(s.connectedAt), true
 }
 
 // handleConnection handles reading and writing for a TLS session.
@@ -493,6 +548,9 @@ func (s *TlsSession) setConnected(status bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.connected = status
+	if status {
+		s.connectedAt = time.Now()
+	}
 }
 
 // IsConnected returns whether the session is connected.
