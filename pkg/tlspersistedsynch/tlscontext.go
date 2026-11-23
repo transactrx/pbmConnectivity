@@ -192,6 +192,10 @@ func (ctx *TlsContext) DisconnectSession(index int) {
 }
 
 func (ctx *TlsContext) StartMonitoring(threshold int, interval time.Duration) {
+	maxConnAge := time.Duration(Cfg.MaxConnAgeMinutes) * maxConnAgeUnit
+	if maxConnAge > 0 {
+		log.Printf("TlsContext connection recycling enabled: max age %s (staggered per chnl)", maxConnAge)
+	}
 	go func() {
 		for {
 			time.Sleep(interval)
@@ -201,8 +205,8 @@ func (ctx *TlsContext) StartMonitoring(threshold int, interval time.Duration) {
 					ctx.DisconnectSession(i)
 				}
 			}
-			if Cfg.MaxConnAgeMinutes > 0 {
-				ctx.recycleOldSessions(time.Duration(Cfg.MaxConnAgeMinutes) * maxConnAgeUnit)
+			if maxConnAge > 0 {
+				ctx.recycleOldSessions(maxConnAge)
 			}
 		}
 	}()
