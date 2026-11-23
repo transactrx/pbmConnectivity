@@ -125,8 +125,9 @@ func TestRecycleOldSessions(t *testing.T) {
 	})
 
 	// Both sessions connect (6s LB pause before they're marked connected).
-	if !waitFor(t, 15*time.Second, func() bool { return ctx.GetConnectionCount() == 2 }) {
-		t.Fatalf("sessions did not connect, count=%d", ctx.GetConnectionCount())
+	bothUp := func() bool { return ctx.sessions[0].IsConnected() && ctx.sessions[1].IsConnected() }
+	if !waitFor(t, 15*time.Second, bothUp) {
+		t.Fatalf("sessions did not connect")
 	}
 	if got := accepted.Load(); got != 2 {
 		t.Fatalf("accepted = %d, want 2", got)
